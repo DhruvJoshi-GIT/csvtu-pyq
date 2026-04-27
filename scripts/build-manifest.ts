@@ -1,29 +1,53 @@
-// Walks public/papers/ and emits src/data/manifest.json with the full
-// hierarchy + a flat paper list for client-side search.
+// Walks public/papers/ + public/syllabus/ and emits src/data/manifest.json
+// with the full hierarchy + flat indexes for client-side search.
 
 import { readdir, stat, mkdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
 
 const PAPERS_ROOT = "public/papers";
+const SYLLABUS_ROOT = "public/syllabus";
 const OUT_DIR = "src/data";
 const OUT_FILE = "src/data/manifest.json";
 
 type Paper = {
-  id: string;            // unique slug
+  id: string;
   course: string;
-  branch: string;        // "_" if course has no branch axis
-  sem: string;           // "Sem-3" / "1st-Year" / "Unknown-Sem"
-  topic: string;         // "" if not grouped
+  branch: string;
+  sem: string;
+  topic: string;
   subject: string;
-  year: string;          // "2019" / "unknown-year"
+  year: string;
   filename: string;
-  path: string;          // URL-style path under /papers/
+  path: string;
   bytes: number;
+};
+
+type SyllabusEntry = {
+  id: string;
+  program: string;
+  label: string;
+  filename: string;
+  path: string;
+  bytes: number;
+};
+
+type SubjectIndex = {
+  id: string;
+  course: string;
+  branch: string;
+  sem: string;
+  topic: string;
+  name: string;
+  years: string[];
+  paperCount: number;
+  href: string;
 };
 
 async function walk(dir: string): Promise<string[]> {
   const out: string[] = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
+  let entries;
+  try { entries = await readdir(dir, { withFileTypes: true }); } catch { return []; }
+  for (const entry of entries) {
     const p = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...await walk(p));
     else if (entry.isFile() && entry.name.toLowerCase().endsWith(".pdf")) out.push(p);
@@ -32,23 +56,12 @@ async function walk(dir: string): Promise<string[]> {
 }
 
 function pathSegments(rel: string): string[] {
-  // Normalize separators and split
   return rel.replace(/\\/g, "/").split("/").filter(Boolean);
 }
 
-// Parse the path components into structured fields.
-// Possible shapes:
-//   [Course, Branch, Sem, Topic, Subject, Year, file]
-//   [Course, Branch, Sem, Subject, Year, file]
-//   [Course, Sem, Topic, Subject, Year, file]   (single-branch courses)
-//   [Course, Sem, Subject, Year, file]
-//   [Course, "1st-Year", Topic, Subject, Year, file]
-//   [Course, "1st-Year", Subject, Year, file]
 function parsePath(segments: string[]): Omit<Paper, "id" | "path" | "bytes"> {
   const filename = segments[segments.length - 1];
   const course = segments[0];
-
-  // Detect single-branch courses (no branch level): segment[1] looks like Sem-N or 1st-Year
   const isSemSeg = (s: string) => /^Sem-\d+$/.test(s) || s === "Unknown-Sem" || s === "1st-Year";
 
   let i = 1;
@@ -57,10 +70,8 @@ function parsePath(segments: string[]): Omit<Paper, "id" | "path" | "bytes"> {
     branch = segments[i];
     i++;
   }
-  const sem = segments[i++]; // Sem-N / 1st-Year / Unknown-Sem
+  const sem = segments[i++];
 
-  // Detect topic (PascalCase-with-dashes folder) vs subject (lowercase-with-dashes)
-  // Topic-name pattern: starts with uppercase letter
   let topic = "";
   if (i < segments.length - 2 && /^[A-Z]/.test(segments[i])) {
     topic = segments[i];
@@ -68,9 +79,19 @@ function parsePath(segments: string[]): Omit<Paper, "id" | "path" | "bytes"> {
   }
   const subject = segments[i++];
   const year = segments[i++];
-  // segments[i] would be the filename (already pulled into `filename`)
 
   return { course, branch, sem, topic, subject, year, filename };
+}
+
+// Build URL slug for a subject page
+function subjectHref(p: { course: string; branch: string; sem: string; topic: string; subject: string }): string {
+  const parts = [encodeURIComponent(p.course)];
+  // Skip branch in URL when "_" — sem becomes top-level under course
+  if (p.branch && p.branch !== "_") parts.push(encodeURIComponent(p.branch));
+  parts.push(encodeURIComponent(p.sem));
+  if (p.topic) parts.push(encodeURIComponent(p.topic));
+  parts.push(encodeURIComponent(p.subject));
+  return `/c/${parts.join("/")}/`;
 }
 
 async function main() {
@@ -94,7 +115,7 @@ async function main() {
     });
   }
 
-  // Build hierarchy index: course -> branch -> sem -> topic -> subject -> [years]
+  // Build hierarchy index
   type SubjectNode = { name: string; topic: string; years: Set<string>; count: number };
   type SemNode = { name: string; subjects: Map<string, SubjectNode>; topics: Set<string> };
   type BranchNode = { name: string; sems: Map<string, SemNode> };
@@ -109,16 +130,13 @@ async function main() {
     if (!b.sems.has(p.sem)) b.sems.set(p.sem, { name: p.sem, subjects: new Map(), topics: new Set() });
     const s = b.sems.get(p.sem)!;
     const subjKey = p.topic ? `${p.topic}/${p.subject}` : p.subject;
-    if (!s.subjects.has(subjKey)) {
-      s.subjects.set(subjKey, { name: p.subject, topic: p.topic, years: new Set(), count: 0 });
-    }
+    if (!s.subjects.has(subjKey)) s.subjects.set(subjKey, { name: p.subject, topic: p.topic, years: new Set(), count: 0 });
     const subj = s.subjects.get(subjKey)!;
     subj.years.add(p.year);
     subj.count++;
     if (p.topic) s.topics.add(p.topic);
   }
 
-  // Convert to plain JSON-friendly structures
   const tree = [...courses.values()].map(c => ({
     name: c.name,
     branches: [...c.branches.values()].map(b => ({
@@ -136,26 +154,79 @@ async function main() {
     })).sort((a, b) => a.name.localeCompare(b.name)),
   })).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Stats
-  const totalSize = papers.reduce((a, p) => a + p.bytes, 0);
+  // Build flat subjects index for search
+  const subjects: SubjectIndex[] = [];
+  for (const c of tree) {
+    for (const b of c.branches) {
+      for (const s of b.sems) {
+        for (const sub of s.subjects) {
+          subjects.push({
+            id: `${c.name}|${b.name}|${s.name}|${sub.topic}|${sub.name}`,
+            course: c.name,
+            branch: b.name,
+            sem: s.name,
+            topic: sub.topic,
+            name: sub.name,
+            years: sub.years,
+            paperCount: sub.count,
+            href: subjectHref({ course: c.name, branch: b.name, sem: s.name, topic: sub.topic, subject: sub.name }),
+          });
+        }
+      }
+    }
+  }
+
+  // Walk syllabus tree
+  process.stderr.write("Walking syllabus tree...\n");
+  const syllabusFiles = await walk(SYLLABUS_ROOT);
+  process.stderr.write(`Found ${syllabusFiles.length} syllabus PDFs.\n`);
+  const syllabus: SyllabusEntry[] = [];
+  for (const f of syllabusFiles) {
+    const rel = relative(SYLLABUS_ROOT, f);
+    const segs = pathSegments(rel);
+    const program = segs[0];
+    const filename = segs[segs.length - 1];
+    const s = await stat(f);
+    const label = filename
+      .replace(/\.pdf$/i, "")
+      .replace(/[_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    syllabus.push({
+      id: `syllabus|${program}|${filename}`,
+      program,
+      label,
+      filename,
+      path: "/syllabus/" + rel.replace(/\\/g, "/"),
+      bytes: s.size,
+    });
+  }
+  // Group syllabus by program for stats
+  const syllabusByProgram = new Map<string, number>();
+  for (const e of syllabus) syllabusByProgram.set(e.program, (syllabusByProgram.get(e.program) || 0) + 1);
+
+  const totalSize = papers.reduce((a, p) => a + p.bytes, 0) + syllabus.reduce((a, e) => a + e.bytes, 0);
   const stats = {
     totalPapers: papers.length,
+    totalSubjects: subjects.length,
+    totalSyllabus: syllabus.length,
     totalSizeBytes: totalSize,
     courses: tree.length,
+    syllabusPrograms: syllabusByProgram.size,
     generatedAt: new Date().toISOString(),
   };
 
   await mkdir(OUT_DIR, { recursive: true });
-  const json = JSON.stringify({ stats, tree, papers }, null, 0);
+  const json = JSON.stringify({ stats, tree, papers, subjects, syllabus }, null, 0);
   await writeFile(OUT_FILE, json);
-  // Also place a copy in public/ so the runtime search can fetch it
   await mkdir("public", { recursive: true });
   await writeFile("public/manifest.json", json);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   const sizeKB = ((await stat(OUT_FILE)).size / 1024).toFixed(0);
-  process.stderr.write(`Wrote ${OUT_FILE} and public/manifest.json (${sizeKB} KB) in ${elapsed}s\n`);
-  process.stderr.write(`Papers: ${papers.length}, total ${(totalSize / 1024 / 1024).toFixed(1)} MB\n`);
+  process.stderr.write(`\nWrote ${OUT_FILE} and public/manifest.json (${sizeKB} KB) in ${elapsed}s\n`);
+  process.stderr.write(`Papers: ${papers.length} | Subjects: ${subjects.length} | Syllabus: ${syllabus.length}\n`);
+  process.stderr.write(`Total size: ${(totalSize / 1024 / 1024).toFixed(1)} MB\n`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });

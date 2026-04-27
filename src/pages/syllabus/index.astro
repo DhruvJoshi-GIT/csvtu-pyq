@@ -1,0 +1,58 @@
+---
+import Base from '../../layouts/Base.astro';
+import manifest from '../../data/manifest.json';
+import { describeCourse } from '../../data/course-info';
+
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
+const { syllabus } = manifest as any;
+
+// Group by program
+const byProgram = new Map<string, any[]>();
+for (const e of syllabus as any[]) {
+  if (!byProgram.has(e.program)) byProgram.set(e.program, []);
+  byProgram.get(e.program)!.push(e);
+}
+const cards = [...byProgram.entries()]
+  .map(([program, entries]) => ({
+    program,
+    fullName: describeCourse(program),
+    count: entries.length,
+    href: `${baseUrl}/syllabus/${encodeURIComponent(program)}/`,
+  }))
+  .sort((a, b) => b.count - a.count);
+
+const total = syllabus.length;
+const crumbs = [
+  { label: 'Home', href: `${baseUrl}/` },
+  { label: 'Syllabus' },
+];
+---
+<Base title="Syllabus & Schemes — CSVTU PYQ" crumbs={crumbs}>
+  <section class="container">
+    <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-5);">
+      <p class="eyebrow fade-in">Syllabus library</p>
+      <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">Curriculum & Scheme PDFs</h1>
+      <p class="hero__lede fade-in">
+        {total} syllabus / scheme PDFs across {cards.length} programs. Sourced from <a href="https://csvtu.ac.in/ew/programs-and-schemes/" target="_blank" rel="noopener" style="color: var(--accent-2);">csvtu.ac.in</a>.
+      </p>
+    </div>
+
+    <div class="section">
+      <div class="section__head">
+        <h2 class="section__title">Programs</h2>
+        <span class="section__count">{cards.length} programs</span>
+      </div>
+      <div class="grid grid--lg">
+        {cards.map((c, i) => (
+          <a href={c.href} class="card fade-in" style={`animation-delay:${50 * (i % 9)}ms`}>
+            <span class="card__chip">{c.count}</span>
+            <h3 class="card__title">{c.program}</h3>
+            {c.fullName && <p class="card__sub">{c.fullName}</p>}
+            <p class="card__desc">{c.count} {c.count === 1 ? 'PDF' : 'PDFs'}</p>
+            <div class="card__stats"><span>Schemes &amp; syllabus</span></div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+</Base>

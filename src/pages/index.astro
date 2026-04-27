@@ -1,13 +1,14 @@
 ---
 import Base from '../layouts/Base.astro';
 import manifest from '../data/manifest.json';
+import { describeCourse } from '../data/course-info';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const { stats, tree } = manifest as any;
+const { stats, tree, syllabus } = manifest as any;
 
-// Compute paper counts per course
+// Course cards (PYQ side)
 const courseCards = tree.map((c: any) => {
-  const branchCount = c.branches.filter((b: any) => b.name !== '_').length;
+  const realBranches = c.branches.filter((b: any) => b.name !== '_');
   let paperCount = 0;
   let semSet = new Set<string>();
   for (const b of c.branches) {
@@ -18,39 +19,44 @@ const courseCards = tree.map((c: any) => {
   }
   return {
     name: c.name,
-    branches: branchCount,
+    fullName: describeCourse(c.name),
+    branches: realBranches.length,
     sems: semSet.size,
     papers: paperCount,
     href: `${base}/c/${encodeURIComponent(c.name)}/`,
   };
 }).sort((a: any, b: any) => b.papers - a.papers);
 
+// Syllabus programs available
+const syllabusPrograms = new Set<string>();
+for (const e of syllabus as any[]) syllabusPrograms.add(e.program);
+
 const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
 ---
-<Base title="CSVTU PYQ — Previous Year Question Papers">
+<Base title="CSVTU PYQ — Previous Year Question Papers & Syllabus">
   <section class="container hero">
-    <p class="eyebrow fade-in">CSVTU · question paper archive</p>
-    <h1 class="fade-in" style="margin-top: var(--s-3);">Every paper. Every year. One place.</h1>
+    <p class="eyebrow fade-in">CSVTU · question papers + syllabus</p>
+    <h1 class="fade-in" style="margin-top: var(--s-3);">Every paper. Every syllabus. One place.</h1>
     <p class="hero__lede fade-in">
-      {stats.totalPapers.toLocaleString()} previous-year question papers across BTech, Diploma, MBA, MCA, MTech, BCA, and Pharmacy. Browse by course, branch, semester, and subject — or just search.
+      {stats.totalPapers.toLocaleString()} previous-year question papers and {stats.totalSyllabus} syllabus / scheme PDFs across {stats.courses} courses. Browse, or just search by subject.
     </p>
 
     <div class="hero__stats fade-in">
       <div class="hero__stat">
         <span class="hero__stat-num">{stats.totalPapers.toLocaleString()}</span>
-        <span class="hero__stat-label">Papers</span>
+        <span class="hero__stat-label">Question papers</span>
       </div>
       <div class="hero__stat">
-        <span class="hero__stat-num">{stats.courses}</span>
-        <span class="hero__stat-label">Courses</span>
+        <span class="hero__stat-num">{stats.totalSyllabus}</span>
+        <span class="hero__stat-label">Syllabus PDFs</span>
       </div>
       <div class="hero__stat">
-        <span class="hero__stat-num">{totalSize} MB</span>
-        <span class="hero__stat-label">Archive size</span>
+        <span class="hero__stat-num">{stats.totalSubjects.toLocaleString()}</span>
+        <span class="hero__stat-label">Subjects</span>
       </div>
     </div>
 
-    <div class="search fade-in" style="--anim-delay: 200ms;">
+    <div class="search fade-in">
       <svg class="search__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="11" cy="11" r="8"></circle>
         <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -59,7 +65,7 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
         id="search-input"
         type="search"
         class="search__input"
-        placeholder="Search papers — e.g. 'mathematics 3', 'cyber security', '2019'…"
+        placeholder="Search by subject — &ldquo;math 3&rdquo;, &ldquo;dbms 2019&rdquo;, &ldquo;cyber security&rdquo;…"
         autocomplete="off"
       />
       <div id="search-results" class="search__results" role="listbox"></div>
@@ -67,94 +73,63 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
   </section>
 
   <section class="container section">
+    <div class="cat-cards">
+      <a href="#pyq-courses" class="cat-card fade-in">
+        <div class="cat-card__icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="9" y1="13" x2="15" y2="13"/>
+            <line x1="9" y1="17" x2="15" y2="17"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="cat-card__title">Past Year Question Papers</h2>
+          <p class="cat-card__desc">{stats.totalPapers.toLocaleString()} papers · sorted by course → branch → semester → subject → year</p>
+          <span class="cat-card__cta">Browse PYQs ↓</span>
+        </div>
+      </a>
+
+      <a href={`${base}/syllabus/`} class="cat-card cat-card--alt fade-in">
+        <div class="cat-card__icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="cat-card__title">Syllabus & Schemes</h2>
+          <p class="cat-card__desc">{stats.totalSyllabus} PDFs · curriculum schemes for {syllabusPrograms.size} programs from CSVTU</p>
+          <span class="cat-card__cta">Browse Syllabus →</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <section class="container section" id="pyq-courses">
     <div class="section__head">
-      <h2 class="section__title">Browse by course</h2>
+      <h2 class="section__title">Browse PYQs by course</h2>
       <span class="section__count">{stats.courses} courses · {stats.totalPapers.toLocaleString()} papers</span>
     </div>
     <div class="grid grid--lg">
       {courseCards.map((c: any, i: number) => (
-        <a href={c.href} class="card fade-in" style={`animation-delay:${60 * (i % 9)}ms`}>
+        <a href={c.href} class="card fade-in" style={`animation-delay:${50 * (i % 9)}ms`}>
           <span class="card__chip">{c.papers}</span>
           <h3 class="card__title">{c.name}</h3>
+          {c.fullName && <p class="card__sub">{c.fullName}</p>}
           <p class="card__desc">
             {c.branches > 0 ? `${c.branches} ${c.branches === 1 ? 'branch' : 'branches'} · ` : ''}
             {c.sems} {c.sems === 1 ? 'semester' : 'semesters'}
           </p>
-          <div class="card__stats">
-            <span>{c.papers.toLocaleString()} papers</span>
-          </div>
+          <div class="card__stats"><span>{c.papers.toLocaleString()} papers</span></div>
         </a>
       ))}
     </div>
   </section>
 
   <script>
-    // Lazy-load full paper list for search
-    const input = document.getElementById('search-input') as HTMLInputElement;
-    const resultsEl = document.getElementById('search-results') as HTMLDivElement;
+    import { initSearch } from '../scripts/search';
     const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-
-    let papers: any[] | null = null;
-    let manifestLoading: Promise<void> | null = null;
-
-    async function loadPapers() {
-      if (papers) return;
-      if (!manifestLoading) {
-        manifestLoading = (async () => {
-          // Manifest is bundled — but we can also fetch a runtime copy.
-          // Easier: import the same JSON via static asset path.
-          const res = await fetch(`${base}/manifest.json`);
-          const data = await res.json();
-          papers = data.papers;
-        })();
-      }
-      await manifestLoading;
-    }
-
-    function escapeHtml(s: string) {
-      return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
-    }
-
-    function format(p: any) {
-      const subj = p.subject.replace(/-/g, ' ');
-      const sem = p.sem.replace('Sem-', 'Sem ');
-      const branch = p.branch === '_' ? '' : ` · ${p.branch}`;
-      const year = p.year !== 'unknown-year' ? ` · ${p.year}` : '';
-      return {
-        title: subj,
-        meta: `${p.course}${branch} · ${sem}${year}`,
-      };
-    }
-
-    let lastQuery = '';
-    let debounce: any;
-    input.addEventListener('input', () => {
-      clearTimeout(debounce);
-      debounce = setTimeout(async () => {
-        const q = input.value.trim().toLowerCase();
-        if (q === lastQuery) return;
-        lastQuery = q;
-        if (q.length < 2) { resultsEl.innerHTML = ''; return; }
-        await loadPapers();
-        const tokens = q.split(/\s+/);
-        const matches = papers!.filter(p => {
-          const hay = `${p.subject} ${p.course} ${p.branch} ${p.sem} ${p.year} ${p.topic}`.toLowerCase();
-          return tokens.every(t => hay.includes(t));
-        }).slice(0, 30);
-        if (matches.length === 0) {
-          resultsEl.innerHTML = '<div class="empty">No papers match.</div>';
-          return;
-        }
-        resultsEl.innerHTML = matches.map(p => {
-          const f = format(p);
-          return `<a class="search__hit" href="${base}${p.path}" target="_blank" rel="noopener">
-            <div>
-              <div class="search__hit-name">${escapeHtml(f.title)}</div>
-              <div class="search__hit-meta">${escapeHtml(f.meta)}</div>
-            </div>
-          </a>`;
-        }).join('');
-      }, 120);
-    });
+    initSearch(base);
   </script>
 </Base>

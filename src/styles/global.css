@@ -429,6 +429,198 @@ h1, h2, h3, h4 {
 .site-footer a { color: var(--text-1); transition: color var(--t-fast); }
 .site-footer a:hover { color: var(--accent); }
 
+/* ─────────── Card subtitle (course full form) ─────────── */
+.card__sub {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-1);
+  font-weight: 400;
+  letter-spacing: -0.005em;
+}
+
+/* ─────────── Category cards (PYQ / Syllabus on home) ─────────── */
+.cat-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+  margin-top: var(--s-4);
+}
+.cat-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-4);
+  padding: var(--s-6);
+  background:
+    linear-gradient(135deg, rgba(124,92,255,0.10), rgba(124,92,255,0.02)),
+    var(--bg-glass);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  transition: transform var(--t-med), border-color var(--t-med), background var(--t-med);
+  position: relative;
+  overflow: hidden;
+}
+.cat-card--alt {
+  background:
+    linear-gradient(135deg, rgba(92,214,255,0.10), rgba(92,214,255,0.02)),
+    var(--bg-glass);
+}
+.cat-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--accent);
+}
+.cat-card--alt:hover {
+  border-color: var(--accent-2);
+}
+.cat-card__icon {
+  flex-shrink: 0;
+  width: 60px;
+  height: 60px;
+  border-radius: var(--r-md);
+  background: rgba(124,92,255,0.15);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+.cat-card--alt .cat-card__icon {
+  background: rgba(92,214,255,0.15);
+  color: var(--accent-2);
+}
+.cat-card__title {
+  font-size: clamp(20px, 2.5vw, 26px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.cat-card__desc {
+  margin-top: var(--s-1);
+  font-size: 14px;
+  color: var(--text-1);
+  line-height: 1.5;
+}
+.cat-card__cta {
+  display: inline-block;
+  margin-top: var(--s-3);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: -0.005em;
+}
+.cat-card--alt .cat-card__cta {
+  color: var(--accent-2);
+}
+@media (max-width: 768px) {
+  .cat-cards { grid-template-columns: 1fr; gap: var(--s-3); }
+  .cat-card { padding: var(--s-4); flex-direction: column; gap: var(--s-3); border-radius: var(--r-lg); }
+  .cat-card__icon { width: 48px; height: 48px; }
+  .cat-card__title { font-size: 18px; }
+  .cat-card__desc { font-size: 13px; }
+}
+
+/* ─────────── Year accordion (subject page) ─────────── */
+.year-acc {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: var(--bg-glass);
+  transition: border-color var(--t-fast);
+}
+.year-acc:hover { border-color: var(--border-strong); }
+.year-acc__head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--s-4) var(--s-5);
+  cursor: pointer;
+  user-select: none;
+  font-size: 17px;
+  font-weight: 600;
+  scroll-margin-top: 80px;
+}
+.year-acc__num {
+  font-feature-settings: 'tnum';
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.year-acc__count {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 400;
+}
+.year-acc__caret {
+  transition: transform var(--t-fast);
+  color: var(--text-2);
+}
+.year-acc[open] .year-acc__caret { transform: rotate(90deg); }
+.year-acc__body {
+  padding: 0 var(--s-4) var(--s-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+@media (max-width: 768px) {
+  .year-acc__head { padding: var(--s-3) var(--s-4); min-height: 56px; }
+  .year-acc__num { font-size: 18px; }
+  .year-acc__body { padding: 0 var(--s-3) var(--s-3); }
+}
+
+/* ─────────── Subject name in topic body ─────────── */
+.subject {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.subject__name {
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+/* ─────────── Search result enhancements ─────────── */
+.search__group-label {
+  padding: var(--s-3) var(--s-4) var(--s-2);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-2);
+  font-weight: 700;
+  background: var(--bg-1);
+  border-bottom: 1px solid var(--border);
+}
+.search__hit {
+  align-items: center;
+}
+.search__hit-right {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-2);
+  display: flex;
+  gap: 4px;
+}
+.search__year {
+  display: inline-block;
+  padding: 2px 8px;
+  background: rgba(124,92,255,0.15);
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 11px;
+  color: #b8a8ff;
+  font-feature-settings: 'tnum';
+}
+.search__chip {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.search__chip--pyq {
+  background: rgba(124,92,255,0.15);
+  color: #b8a8ff;
+}
+.search__chip--syllabus {
+  background: rgba(92,214,255,0.15);
+  color: #8de0ff;
+}
+
 /* Animation */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }

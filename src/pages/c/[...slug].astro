@@ -1,42 +1,43 @@
 ---
 import Base from '../../layouts/Base.astro';
 import manifest from '../../data/manifest.json';
+import { describeCourse, describeBranch } from '../../data/course-info';
 
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
-
-// ============ Anchor helper (single source of truth) ============
-function subjectAnchor(topic: string, subject: string): string {
-  const key = topic ? `${topic}/${subject}` : subject;
-  return 'subject-' + key.replace(/[^a-z0-9]/gi, '-');
-}
 
 export async function getStaticPaths() {
   const m = (await import('../../data/manifest.json')).default as any;
   const paths: any[] = [];
 
   for (const course of m.tree) {
-    // Course-level view
     paths.push({
       params: { slug: encodeURIComponent(course.name) },
       props: { view: 'course', course },
     });
 
-    const isSingleBranch = course.branches.length === 1 && course.branches[0].name === '_';
-
     for (const branch of course.branches) {
-      // For "_" branch (no real branch name), skip the branch view and put
-      // sem URLs directly under the course (e.g. /c/BTech/1st-Year/).
+      // _ branch: skip the branch view, promote sems to top-level under course
       if (branch.name === '_') {
         for (const sem of branch.sems) {
           paths.push({
             params: { slug: `${encodeURIComponent(course.name)}/${encodeURIComponent(sem.name)}` },
             props: { view: 'sem', course, branch, sem },
           });
+          // Subject pages under this sem
+          for (const subject of sem.subjects) {
+            const segs = [encodeURIComponent(course.name), encodeURIComponent(sem.name)];
+            if (subject.topic) segs.push(encodeURIComponent(subject.topic));
+            segs.push(encodeURIComponent(subject.name));
+            paths.push({
+              params: { slug: segs.join('/') },
+              props: { view: 'subject', course, branch, sem, subject },
+            });
+          }
         }
         continue;
       }
 
-      // Real branch — generate branch view + sem views nested under it
+      // Real branch — branch view + sems + subjects
       paths.push({
         params: { slug: `${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}` },
         props: { view: 'branch', course, branch },
@@ -47,6 +48,15 @@ export async function getStaticPaths() {
           params: { slug: `${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}/${encodeURIComponent(sem.name)}` },
           props: { view: 'sem', course, branch, sem },
         });
+        for (const subject of sem.subjects) {
+          const segs = [encodeURIComponent(course.name), encodeURIComponent(branch.name), encodeURIComponent(sem.name)];
+          if (subject.topic) segs.push(encodeURIComponent(subject.topic));
+          segs.push(encodeURIComponent(subject.name));
+          paths.push({
+            params: { slug: segs.join('/') },
+            props: { view: 'subject', course, branch, sem, subject },
+          });
+        }
       }
     }
   }
@@ -55,10 +65,11 @@ export async function getStaticPaths() {
 }
 
 const props = Astro.props as any;
-const view = props.view as 'course' | 'branch' | 'sem';
+const view = props.view as 'course' | 'branch' | 'sem' | 'subject';
 const course = props.course;
 const branch = props.branch;
 const sem = props.sem;
+const subject = props.subject;
 
 // ============ Helpers ============
 function paperCount(branch: any): number {
@@ -77,47 +88,49 @@ function semLabel(name: string): string {
 function isSingleBranch(c: any): boolean {
   return c.branches.length === 1 && c.branches[0].name === '_';
 }
+function prettyName(name: string): string {
+  return name.replace(/-/g, ' ');
+}
+function subjectHref(course: any, branch: any, sem: any, subject: any): string {
+  const segs = [encodeURIComponent(course.name)];
+  if (branch.name !== '_') segs.push(encodeURIComponent(branch.name));
+  segs.push(encodeURIComponent(sem.name));
+  if (subject.topic) segs.push(encodeURIComponent(subject.topic));
+  segs.push(encodeURIComponent(subject.name));
+  return `${baseUrl}/c/${segs.join('/')}/`;
+}
 
 // ============ Course view data ============
-// Cards combine real branches + sems from the "_" branch (1st-Year etc.) so
-// the user never sees a card titled "_".
-type CourseCard = {
-  type: 'branch' | 'sem';
-  name: string;
-  desc: string;
-  papers: number;
-  href: string;
-};
+type CourseCard = { name: string; sub: string | undefined; desc: string; papers: number; href: string };
 let courseCards: CourseCard[] = [];
 let courseTotalPapers = 0;
 let courseHeading = 'Branches';
+let courseSubtitle: string | undefined = undefined;
 
 if (view === 'course') {
   for (const b of course.branches) courseTotalPapers += paperCount(b);
+  courseSubtitle = describeCourse(course.name);
 
   if (isSingleBranch(course)) {
-    // Single "_" branch — show sems as cards
     courseHeading = 'Semesters';
     courseCards = course.branches[0].sems.map((s: any) => ({
-      type: 'sem' as const,
       name: semLabel(s.name),
+      sub: undefined,
       desc: `${s.subjects.length} subject${s.subjects.length === 1 ? '' : 's'}`,
       papers: semPaperCount(s),
       href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(s.name)}/`,
     }));
   } else {
-    // Multi-branch — merge real branches + "_" branch's sems into one list
     const realBranches = course.branches.filter((b: any) => b.name !== '_');
     const underscore = course.branches.find((b: any) => b.name === '_');
     courseHeading = underscore ? 'Branches & shared papers' : 'Branches';
 
-    // _ branch sems first (e.g. 1st Year), then lettered branches
     if (underscore) {
       for (const s of underscore.sems) {
         courseCards.push({
-          type: 'sem',
           name: semLabel(s.name),
-          desc: `Shared across all branches · ${s.subjects.length} subject${s.subjects.length === 1 ? '' : 's'}`,
+          sub: 'Shared across all branches',
+          desc: `${s.subjects.length} subject${s.subjects.length === 1 ? '' : 's'}`,
           papers: semPaperCount(s),
           href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(s.name)}/`,
         });
@@ -125,8 +138,8 @@ if (view === 'course') {
     }
     for (const b of realBranches) {
       courseCards.push({
-        type: 'branch',
         name: b.name,
+        sub: describeBranch(b.name),
         desc: `${b.sems.length} semester${b.sems.length === 1 ? '' : 's'}`,
         papers: paperCount(b),
         href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(b.name)}/`,
@@ -138,8 +151,10 @@ if (view === 'course') {
 // ============ Branch view data ============
 let branchSemCards: any[] = [];
 let branchTotalPapers = 0;
+let branchSubtitle: string | undefined = undefined;
 if (view === 'branch') {
   branchTotalPapers = paperCount(branch);
+  branchSubtitle = describeBranch(branch.name);
   branchSemCards = branch.sems.map((s: any) => ({
     name: s.name,
     label: semLabel(s.name),
@@ -151,10 +166,8 @@ if (view === 'branch') {
 
 // ============ Sem view data ============
 type TopicGroup = { name: string; subjects: any[]; subjectCount: number; paperCount: number };
-type SubjectPapers = { subjectKey: string; subjectName: string; topic: string; subjectPapers: any[]; byYear: Array<{ year: string; papers: any[] }>; anchorId: string };
 let semTopics: TopicGroup[] = [];
 let semUngrouped: any[] = [];
-let semPapersBySubject: SubjectPapers[] = [];
 let semTotalPapers = 0;
 
 if (view === 'sem') {
@@ -166,49 +179,40 @@ if (view === 'sem') {
     } else {
       semUngrouped.push(s);
     }
+    semTotalPapers += s.count;
   }
   semTopics = [...byTopic.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([topicName, subjects]) => ({
       name: topicName,
-      subjects,
+      subjects: subjects.sort((a: any, b: any) => a.name.localeCompare(b.name)),
       subjectCount: subjects.length,
       paperCount: subjects.reduce((a: number, s: any) => a + s.count, 0),
     }));
+}
 
+// ============ Subject view data ============
+let subjectPapers: any[] = [];
+let subjectByYear: Array<{ year: string; papers: any[] }> = [];
+
+if (view === 'subject') {
   const allPapers = (manifest as any).papers as any[];
-  const branchFilter = branch.name; // "_" stays "_" since data uses "_"
-  const semPapers = allPapers.filter(p =>
-    p.course === course.name && p.branch === branchFilter && p.sem === sem.name
+  subjectPapers = allPapers.filter(p =>
+    p.course === course.name &&
+    p.branch === branch.name &&
+    p.sem === sem.name &&
+    p.subject === subject.name &&
+    (subject.topic ? p.topic === subject.topic : !p.topic)
   );
-  semTotalPapers = semPapers.length;
 
-  const bySubject = new Map<string, { topic: string; subject: string; papers: any[] }>();
-  for (const p of semPapers) {
-    const key = (p.topic ? p.topic + '/' : '') + p.subject;
-    if (!bySubject.has(key)) bySubject.set(key, { topic: p.topic || '', subject: p.subject, papers: [] });
-    bySubject.get(key)!.papers.push(p);
+  const byYearMap = new Map<string, any[]>();
+  for (const p of subjectPapers) {
+    if (!byYearMap.has(p.year)) byYearMap.set(p.year, []);
+    byYearMap.get(p.year)!.push(p);
   }
-  semPapersBySubject = [...bySubject.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([subjectKey, group]) => {
-      const byYearMap = new Map<string, any[]>();
-      for (const p of group.papers) {
-        if (!byYearMap.has(p.year)) byYearMap.set(p.year, []);
-        byYearMap.get(p.year)!.push(p);
-      }
-      const byYear = [...byYearMap.entries()]
-        .sort((a, b) => b[0].localeCompare(a[0]))
-        .map(([year, papers]) => ({ year, papers }));
-      return {
-        subjectKey,
-        subjectName: group.subject,
-        topic: group.topic,
-        subjectPapers: group.papers,
-        byYear,
-        anchorId: subjectAnchor(group.topic, group.subject),
-      };
-    });
+  subjectByYear = [...byYearMap.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([year, papers]) => ({ year, papers }));
 }
 
 // ============ Crumbs + title ============
@@ -222,13 +226,28 @@ if (view === 'course') {
   crumbs.push({ label: course.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/` });
   crumbs.push({ label: branch.name });
   title = `${course.name} ${branch.name} — CSVTU PYQ`;
-} else {
+} else if (view === 'sem') {
   crumbs.push({ label: course.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/` });
   if (branch.name !== '_') {
     crumbs.push({ label: branch.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}/` });
   }
   crumbs.push({ label: semLabel(sem.name) });
   title = `${course.name}${branch.name === '_' ? '' : ' ' + branch.name} ${semLabel(sem.name)} — CSVTU PYQ`;
+} else {
+  // subject
+  crumbs.push({ label: course.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/` });
+  if (branch.name !== '_') {
+    crumbs.push({ label: branch.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}/` });
+  }
+  const semSegs = branch.name !== '_'
+    ? `${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}/${encodeURIComponent(sem.name)}`
+    : `${encodeURIComponent(course.name)}/${encodeURIComponent(sem.name)}`;
+  crumbs.push({ label: semLabel(sem.name), href: `${baseUrl}/c/${semSegs}/` });
+  if (subject.topic) {
+    crumbs.push({ label: subject.topic.replace(/-/g, ' ') });
+  }
+  crumbs.push({ label: prettyName(subject.name) });
+  title = `${prettyName(subject.name)} — ${course.name}${branch.name === '_' ? '' : ' ' + branch.name} ${semLabel(sem.name)} · CSVTU PYQ`;
 }
 ---
 <Base title={title} crumbs={crumbs}>
@@ -237,6 +256,9 @@ if (view === 'course') {
       <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-5);">
         <p class="eyebrow fade-in">Course</p>
         <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">{course.name}</h1>
+        {courseSubtitle && (
+          <p class="fade-in" style="margin-top: var(--s-2); color: var(--text-1); font-size: 18px;">{courseSubtitle}</p>
+        )}
         <p class="hero__lede fade-in">
           {courseCards.length} {courseHeading.toLowerCase()} · {courseTotalPapers.toLocaleString()} papers
         </p>
@@ -246,12 +268,12 @@ if (view === 'course') {
         <div class="section__head">
           <h2 class="section__title">{courseHeading}</h2>
         </div>
-
         <div class="grid">
           {courseCards.map((c, i) => (
             <a href={c.href} class="card fade-in" style={`animation-delay:${50 * (i % 9)}ms`}>
               <span class="card__chip">{c.papers}</span>
               <h3 class="card__title">{c.name}</h3>
+              {c.sub && <p class="card__sub">{c.sub}</p>}
               <p class="card__desc">{c.desc}</p>
               <div class="card__stats"><span>{c.papers.toLocaleString()} papers</span></div>
             </a>
@@ -266,6 +288,9 @@ if (view === 'course') {
       <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-5);">
         <p class="eyebrow fade-in">{course.name}</p>
         <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">{branch.name}</h1>
+        {branchSubtitle && (
+          <p class="fade-in" style="margin-top: var(--s-2); color: var(--text-1); font-size: 18px;">{branchSubtitle}</p>
+        )}
         <p class="hero__lede fade-in">
           {branchSemCards.length} semester{branchSemCards.length === 1 ? '' : 's'} · {branchTotalPapers.toLocaleString()} papers
         </p>
@@ -302,7 +327,7 @@ if (view === 'course') {
           {sem.subjects.length} subject{sem.subjects.length === 1 ? '' : 's'} · {semTotalPapers.toLocaleString()} papers
         </p>
         <p class="muted fade-in" style="margin-top: var(--s-3); font-size: 14px;">
-          Tip: click a subject below to jump to its papers, or scroll to the Papers section.
+          Tap a subject to see its year-by-year papers.
         </p>
       </div>
 
@@ -314,9 +339,9 @@ if (view === 'course') {
           </div>
           <div class="stack">
             {semTopics.map((topic, i) => (
-              <details class="topic fade-in" style={`animation-delay:${40 * (i % 9)}ms`} open={i === 0}>
+              <details class="topic fade-in" style={`animation-delay:${40 * (i % 9)}ms`} open={i < 2}>
                 <summary class="topic__head">
-                  <span class="row" style="gap: var(--s-3);">
+                  <span class="row" style="gap: var(--s-3); min-width: 0;">
                     <svg class="topic__caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                       <polyline points="9 18 15 12 9 6"></polyline>
                     </svg>
@@ -328,8 +353,8 @@ if (view === 'course') {
                 </summary>
                 <div class="topic__body">
                   {topic.subjects.map((s: any) => (
-                    <a href={`#${subjectAnchor(s.topic, s.name)}`} class="subject">
-                      {s.name.replace(/-/g, ' ')}
+                    <a href={subjectHref(course, branch, sem, s)} class="subject">
+                      <span class="subject__name">{s.name.replace(/-/g, ' ')}</span>
                       <span class="subject__count">{s.count} paper{s.count === 1 ? '' : 's'} · {s.years.length} year{s.years.length === 1 ? '' : 's'}</span>
                     </a>
                   ))}
@@ -348,7 +373,7 @@ if (view === 'course') {
           </div>
           <div class="grid">
             {semUngrouped.map((s, i) => (
-              <a href={`#${subjectAnchor('', s.name)}`} class="card fade-in" style={`animation-delay:${30 * (i % 9)}ms`}>
+              <a href={subjectHref(course, branch, sem, s)} class="card fade-in" style={`animation-delay:${30 * (i % 9)}ms`}>
                 <span class="card__chip">{s.count}</span>
                 <h3 class="card__title">{s.name.replace(/-/g, ' ')}</h3>
                 <p class="card__desc">{s.years.length} year{s.years.length === 1 ? '' : 's'}</p>
@@ -357,35 +382,51 @@ if (view === 'course') {
           </div>
         </div>
       )}
+    </section>
+  )}
 
-      <div class="section">
-        <div class="section__head">
-          <h2 class="section__title">Papers</h2>
-          <span class="section__count">{semTotalPapers.toLocaleString()} papers</span>
-        </div>
+  {view === 'subject' && (
+    <section class="container">
+      <div class="hero" style="padding-top: var(--s-6); padding-bottom: var(--s-4);">
+        <p class="eyebrow fade-in">
+          {course.name}{branch.name !== '_' ? ` · ${branch.name}` : ''} · {semLabel(sem.name)}
+          {subject.topic && (
+            <> · {subject.topic.replace(/-/g, ' ')}</>
+          )}
+        </p>
+        <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(28px, 5vw, 48px); text-transform: capitalize;">
+          {prettyName(subject.name)}
+        </h1>
+        <p class="hero__lede fade-in">
+          {subjectPapers.length} paper{subjectPapers.length === 1 ? '' : 's'} · {subjectByYear.length} year{subjectByYear.length === 1 ? '' : 's'}
+        </p>
+        <p class="muted fade-in" style="margin-top: var(--s-3); font-size: 14px;">
+          Tap a year to expand its papers.
+        </p>
+      </div>
 
-        {semPapersBySubject.map((subj) => (
-          <div id={subj.anchorId} style="margin-top: var(--s-6); scroll-margin-top: 80px;">
-            <h3 style="font-size: 20px; text-transform: capitalize; margin-bottom: var(--s-4); letter-spacing: -0.01em;">
-              {subj.subjectName.replace(/-/g, ' ')}
-              <span style="font-size: 13px; color: var(--text-2); font-weight: 400; margin-left: var(--s-3);">
-                {subj.subjectPapers.length} paper{subj.subjectPapers.length === 1 ? '' : 's'}
-              </span>
-            </h3>
-            {subj.byYear.map((yearGroup) => (
-              <div class="year-block">
-                <div class="year-head">
-                  <span class="year-head__num">{yearGroup.year === 'unknown-year' ? '—' : yearGroup.year}</span>
-                  <span class="year-head__count">{yearGroup.papers.length} paper{yearGroup.papers.length === 1 ? '' : 's'}</span>
-                </div>
+      <div class="section" style="margin-top: var(--s-4);">
+        <div class="stack-tight">
+          {subjectByYear.map((yearGroup, i) => (
+            <details class="year-acc fade-in" style={`animation-delay:${40 * (i % 9)}ms`} open={i === 0} id={`year-${yearGroup.year}`}>
+              <summary class="year-acc__head">
+                <span class="row" style="gap: var(--s-3); min-width: 0;">
+                  <svg class="year-acc__caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                  <span class="year-acc__num">{yearGroup.year === 'unknown-year' ? '—' : yearGroup.year}</span>
+                </span>
+                <span class="year-acc__count">{yearGroup.papers.length} paper{yearGroup.papers.length === 1 ? '' : 's'}</span>
+              </summary>
+              <div class="year-acc__body">
                 {yearGroup.papers.map((p: any) => {
                   const monthMatch = p.filename.match(/-(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)-/i);
                   const month = monthMatch ? monthMatch[1].toUpperCase() : '';
                   const sizeKB = (p.bytes / 1024).toFixed(0);
-                  const label = month ? `${month} ${yearGroup.year}` : p.filename.replace(/\.pdf$/, '').replace(/-/g, ' ');
+                  const label = month ? `${month} ${yearGroup.year}` : prettyName(p.filename.replace(/\.pdf$/, ''));
                   return (
                     <div class="paper">
-                      <div>
+                      <div style="flex: 1; min-width: 0;">
                         <div class="paper__title">{label}</div>
                         <div class="paper__meta">{sizeKB} KB · {p.filename}</div>
                       </div>
@@ -394,9 +435,9 @@ if (view === 'course') {
                   );
                 })}
               </div>
-            ))}
-          </div>
-        ))}
+            </details>
+          ))}
+        </div>
       </div>
     </section>
   )}

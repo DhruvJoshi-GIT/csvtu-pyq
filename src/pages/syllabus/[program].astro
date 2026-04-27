@@ -1,0 +1,61 @@
+---
+import Base from '../../layouts/Base.astro';
+import manifest from '../../data/manifest.json';
+import { describeCourse } from '../../data/course-info';
+
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+export async function getStaticPaths() {
+  const m = (await import('../../data/manifest.json')).default as any;
+  const byProgram = new Map<string, any[]>();
+  for (const e of m.syllabus as any[]) {
+    if (!byProgram.has(e.program)) byProgram.set(e.program, []);
+    byProgram.get(e.program)!.push(e);
+  }
+  return [...byProgram.entries()].map(([program, entries]) => ({
+    params: { program: encodeURIComponent(program) },
+    props: { program, entries },
+  }));
+}
+
+const { program, entries } = Astro.props as any;
+const fullName = describeCourse(program);
+const sortedEntries = [...entries].sort((a: any, b: any) => a.label.localeCompare(b.label));
+
+const crumbs = [
+  { label: 'Home', href: `${baseUrl}/` },
+  { label: 'Syllabus', href: `${baseUrl}/syllabus/` },
+  { label: program },
+];
+---
+<Base title={`${program} Syllabus — CSVTU PYQ`} crumbs={crumbs}>
+  <section class="container">
+    <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-5);">
+      <p class="eyebrow fade-in">Syllabus · {program}</p>
+      <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 48px);">{program}</h1>
+      {fullName && (
+        <p class="fade-in" style="margin-top: var(--s-2); color: var(--text-1); font-size: 18px;">{fullName}</p>
+      )}
+      <p class="hero__lede fade-in">
+        {sortedEntries.length} {sortedEntries.length === 1 ? 'PDF' : 'PDFs'}
+      </p>
+    </div>
+
+    <div class="section">
+      <div class="stack-tight">
+        {sortedEntries.map((e: any) => {
+          const sizeKB = (e.bytes / 1024).toFixed(0);
+          return (
+            <div class="paper">
+              <div style="flex: 1; min-width: 0;">
+                <div class="paper__title" style="text-transform: none;">{e.label}</div>
+                <div class="paper__meta">{sizeKB} KB · {e.filename}</div>
+              </div>
+              <a class="paper__btn" href={`${baseUrl}${e.path}`} target="_blank" rel="noopener">View PDF</a>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  </section>
+</Base>
