@@ -28,7 +28,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   <header class="site-header">
     <div class="container site-header__inner">
       <a href={base + '/'} class="logo">
-        <span class="logo__mark">P</span>
+        <img src={base + '/assets/csvtu-logo.png'} alt="CSVTU" class="logo__mark" width="32" height="34" />
         <span>CSVTU PYQ</span>
       </a>
       {crumbs.length > 0 && (
@@ -50,9 +50,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <footer class="site-footer">
     <div class="container">
-      <p>CSVTU PYQ — Previous Year Question Papers</p>
+      <p class="site-footer__disclaimer">
+        <strong>*</strong> This is a student-built archive and is <strong>not</strong> an official Chhattisgarh Swami Vivekanand Technical University website. Not affiliated with, endorsed by, or sponsored by CSVTU. The CSVTU name and logo belong to their respective owners.
+      </p>
+      <p>CSVTU PYQ — Previous Year Question Papers · sourced from public archives</p>
       <p style="margin-top: 6px; font-size: 12px;">
-        Sourced from public university archives. Built with Astro · <a href="https://github.com/DhruvJoshi-GIT/csvtu-pyq" target="_blank" rel="noopener">GitHub</a>
+        Built with Astro · <a href="https://github.com/DhruvJoshi-GIT/csvtu-pyq" target="_blank" rel="noopener">GitHub</a> ·
+        Official CSVTU site: <a href="https://csvtu.ac.in/" target="_blank" rel="noopener">csvtu.ac.in</a>
       </p>
     </div>
   </footer>

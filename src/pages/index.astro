@@ -4,7 +4,7 @@ import manifest from '../data/manifest.json';
 import { describeCourse } from '../data/course-info';
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
-const { stats, tree, syllabus } = manifest as any;
+const { stats, tree } = manifest as any;
 
 // Course cards (PYQ side)
 const courseCards = tree.map((c: any) => {
@@ -27,18 +27,13 @@ const courseCards = tree.map((c: any) => {
   };
 }).sort((a: any, b: any) => b.papers - a.papers);
 
-// Syllabus programs available
-const syllabusPrograms = new Set<string>();
-for (const e of syllabus as any[]) syllabusPrograms.add(e.program);
-
 const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
 ---
 <Base title="CSVTU PYQ — Previous Year Question Papers & Syllabus">
   <section class="container hero">
     <p class="eyebrow fade-in">CSVTU · question papers + syllabus</p>
-    <h1 class="fade-in" style="margin-top: var(--s-3);">Every paper. Every syllabus. One place.</h1>
-    <p class="hero__lede fade-in">
-      {stats.totalPapers.toLocaleString()} previous-year question papers and {stats.totalSyllabus} syllabus / scheme PDFs across {stats.courses} courses. Browse, or just search by subject.
+    <p class="hero__lede fade-in" style="margin-top: var(--s-4); font-size: clamp(18px, 2.2vw, 22px); color: var(--text-0); max-width: 680px;">
+      {stats.totalPapers.toLocaleString()} previous-year question papers, {stats.totalSchemes} curriculum schemes, and links to all CSVTU syllabuses. Browse, or just search by subject.
     </p>
 
     <div class="hero__stats fade-in">
@@ -47,8 +42,8 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
         <span class="hero__stat-label">Question papers</span>
       </div>
       <div class="hero__stat">
-        <span class="hero__stat-num">{stats.totalSyllabus}</span>
-        <span class="hero__stat-label">Syllabus PDFs</span>
+        <span class="hero__stat-num">{stats.totalSchemes}</span>
+        <span class="hero__stat-label">Schemes</span>
       </div>
       <div class="hero__stat">
         <span class="hero__stat-num">{stats.totalSubjects.toLocaleString()}</span>
@@ -73,7 +68,7 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
   </section>
 
   <section class="container section">
-    <div class="cat-cards">
+    <div class="cat-cards cat-cards--3">
       <a href="#pyq-courses" class="cat-card fade-in">
         <div class="cat-card__icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -84,13 +79,27 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
           </svg>
         </div>
         <div>
-          <h2 class="cat-card__title">Past Year Question Papers</h2>
-          <p class="cat-card__desc">{stats.totalPapers.toLocaleString()} papers · sorted by course → branch → semester → subject → year</p>
-          <span class="cat-card__cta">Browse PYQs ↓</span>
+          <h2 class="cat-card__title">PYQs</h2>
+          <p class="cat-card__desc">{stats.totalPapers.toLocaleString()} papers · sorted by course → branch → sem → subject → year</p>
+          <span class="cat-card__cta">Browse ↓</span>
         </div>
       </a>
 
-      <a href={`${base}/syllabus/`} class="cat-card cat-card--alt fade-in">
+      <a href={`${base}/schemes/`} class="cat-card cat-card--alt fade-in">
+        <div class="cat-card__icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 3h18v18H3z"/>
+            <path d="M3 9h18M3 15h18M9 3v18M15 3v18"/>
+          </svg>
+        </div>
+        <div>
+          <h2 class="cat-card__title">Schemes</h2>
+          <p class="cat-card__desc">{stats.totalSchemes} curriculum scheme PDFs · which subjects in which sem · {stats.catalogPrograms} programs</p>
+          <span class="cat-card__cta">Browse →</span>
+        </div>
+      </a>
+
+      <a href={`${base}/syllabus/`} class="cat-card cat-card--alt2 fade-in">
         <div class="cat-card__icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
             <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
@@ -98,9 +107,9 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
           </svg>
         </div>
         <div>
-          <h2 class="cat-card__title">Syllabus & Schemes</h2>
-          <p class="cat-card__desc">{stats.totalSyllabus} PDFs · curriculum schemes for {syllabusPrograms.size} programs from CSVTU</p>
-          <span class="cat-card__cta">Browse Syllabus →</span>
+          <h2 class="cat-card__title">Syllabus</h2>
+          <p class="cat-card__desc">{stats.totalSyllabus} links to detailed syllabus pages · subject content on csvtu.ac.in</p>
+          <span class="cat-card__cta">Browse →</span>
         </div>
       </a>
     </div>

@@ -8,7 +8,7 @@ const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 export async function getStaticPaths() {
   const m = (await import('../../data/manifest.json')).default as any;
-  const catalog = m.catalog.filter((e: any) => e.syllabusUrl);
+  const catalog = m.catalog.filter((e: any) => e.schemeLocalPath);
   const byProgram = new Map<string, any[]>();
   for (const e of catalog) {
     if (!byProgram.has(e.program)) byProgram.set(e.program, []);
@@ -23,6 +23,7 @@ export async function getStaticPaths() {
 const { program, entries } = Astro.props as any;
 const fullName = describeCourse(program);
 
+// Group by session, sorted newest first (Legacy at the bottom)
 const bySession = new Map<string, any[]>();
 for (const e of entries) {
   const s = e.session || 'Other';
@@ -52,22 +53,22 @@ function formatDate(s: string | null): string {
 
 const crumbs = [
   { label: 'Home', href: `${baseUrl}/` },
-  { label: 'Syllabus', href: `${baseUrl}/syllabus/` },
+  { label: 'Schemes', href: `${baseUrl}/schemes/` },
   { label: program },
 ];
 ---
-<Base title={`${program} Syllabus — CSVTU PYQ`} crumbs={crumbs}>
+<Base title={`${program} Schemes — CSVTU PYQ`} crumbs={crumbs}>
   <section class="container">
     <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-4);">
-      <p class="eyebrow fade-in">Syllabus · {program}</p>
+      <p class="eyebrow fade-in">Schemes · {program}</p>
       <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 48px);">{program}</h1>
       {fullName && (
         <p class="fade-in" style="margin-top: var(--s-2); color: var(--text-1); font-size: 18px;">{fullName}</p>
       )}
       <p class="hero__lede fade-in">
-        {entries.length} {entries.length === 1 ? 'syllabus link' : 'syllabus links'} across {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}. Each link opens the official CSVTU page in a new tab.
+        {entries.length} {entries.length === 1 ? 'scheme PDF' : 'scheme PDFs'} across {sessions.length} {sessions.length === 1 ? 'session' : 'sessions'}
       </p>
-      <ResourceTabs active="syllabus" />
+      <ResourceTabs active="schemes" />
     </div>
 
     <div class="section" style="margin-top: var(--s-4);">
@@ -80,7 +81,7 @@ const crumbs = [
               </svg>
               <span class="topic__name">{session.label}</span>
             </span>
-            <span class="topic__meta">{session.entries.length} {session.entries.length === 1 ? 'link' : 'links'}</span>
+            <span class="topic__meta">{session.entries.length} {session.entries.length === 1 ? 'scheme' : 'schemes'}</span>
           </summary>
           <div class="topic__body" style="display: flex; flex-direction: column; gap: var(--s-2);">
             {session.entries.map((e: any) => (
@@ -88,10 +89,11 @@ const crumbs = [
                 <div style="flex: 1; min-width: 0;">
                   <div class="paper__title" style="text-transform: none;">{e.course}</div>
                   <div class="paper__meta">
-                    Page last updated {formatDate(e.syllabusLastModified)} · csvtu.ac.in
+                    Last updated {formatDate(e.schemeLastModified)}
+                    {e.schemeBytes && <> · {(e.schemeBytes / 1024).toFixed(0)} KB</>}
                   </div>
                 </div>
-                <a class="paper__btn" href={e.syllabusUrl} target="_blank" rel="noopener">Open ↗</a>
+                <a class="paper__btn" href={`${baseUrl}${e.schemeLocalPath}`} target="_blank" rel="noopener">View PDF</a>
               </div>
             ))}
           </div>

@@ -7,39 +7,42 @@ import { describeCourse } from '../../data/course-info';
 const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
 const catalog = (manifest as any).catalog as any[];
 
-const syllabusEntries = catalog.filter(e => e.syllabusUrl);
+// Only entries that have a downloaded scheme PDF
+const schemeEntries = catalog.filter(e => e.schemeLocalPath);
 
+// Group by program
 const byProgram = new Map<string, any[]>();
-for (const e of syllabusEntries) {
+for (const e of schemeEntries) {
   if (!byProgram.has(e.program)) byProgram.set(e.program, []);
   byProgram.get(e.program)!.push(e);
 }
 const cards = [...byProgram.entries()].map(([program, entries]) => {
+  // Distinct sessions
   const sessions = new Set(entries.map(e => e.session).filter(Boolean));
   return {
     program,
     fullName: describeCourse(program),
     count: entries.length,
     sessions: [...sessions].sort().reverse(),
-    href: `${baseUrl}/syllabus/${encodeURIComponent(program)}/`,
+    href: `${baseUrl}/schemes/${encodeURIComponent(program)}/`,
   };
 }).sort((a, b) => b.count - a.count);
 
-const total = syllabusEntries.length;
+const total = schemeEntries.length;
 const crumbs = [
   { label: 'Home', href: `${baseUrl}/` },
-  { label: 'Syllabus' },
+  { label: 'Schemes' },
 ];
 ---
-<Base title="Syllabus — CSVTU PYQ" crumbs={crumbs}>
+<Base title="Schemes — CSVTU PYQ" crumbs={crumbs}>
   <section class="container">
     <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-4);">
-      <p class="eyebrow fade-in">Detailed syllabus</p>
-      <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">Syllabus</h1>
+      <p class="eyebrow fade-in">Curriculum schemes</p>
+      <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">Schemes</h1>
       <p class="hero__lede fade-in">
-        {total} syllabus links across {cards.length} programs. Syllabus content is hosted on <a href="https://csvtu.ac.in/" target="_blank" rel="noopener" style="color: var(--accent-2);">csvtu.ac.in</a> and opens in a new tab.
+        {total} scheme PDFs across {cards.length} programs. Sourced from <a href="https://csvtu.ac.in/ew/programs-and-schemes/" target="_blank" rel="noopener" style="color: var(--accent-2);">csvtu.ac.in</a>. A scheme lists every subject, semester, and credit weighting for a course.
       </p>
-      <ResourceTabs active="syllabus" />
+      <ResourceTabs active="schemes" />
     </div>
 
     <div class="section" style="margin-top: var(--s-4);">
@@ -58,7 +61,7 @@ const crumbs = [
                 ? `Sessions: ${c.sessions.slice(0, 3).join(', ')}${c.sessions.length > 3 ? ` (+${c.sessions.length - 3})` : ''}`
                 : 'Various sessions'}
             </p>
-            <div class="card__stats"><span>{c.count} {c.count === 1 ? 'syllabus link' : 'syllabus links'}</span></div>
+            <div class="card__stats"><span>{c.count} {c.count === 1 ? 'scheme' : 'schemes'}</span></div>
           </a>
         ))}
       </div>

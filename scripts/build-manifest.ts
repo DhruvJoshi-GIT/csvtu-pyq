@@ -22,15 +22,6 @@ type Paper = {
   bytes: number;
 };
 
-type SyllabusEntry = {
-  id: string;
-  program: string;
-  label: string;
-  filename: string;
-  path: string;
-  bytes: number;
-};
-
 type SubjectIndex = {
   id: string;
   course: string;
@@ -176,48 +167,34 @@ async function main() {
     }
   }
 
-  // Walk syllabus tree
-  process.stderr.write("Walking syllabus tree...\n");
-  const syllabusFiles = await walk(SYLLABUS_ROOT);
-  process.stderr.write(`Found ${syllabusFiles.length} syllabus PDFs.\n`);
-  const syllabus: SyllabusEntry[] = [];
-  for (const f of syllabusFiles) {
-    const rel = relative(SYLLABUS_ROOT, f);
-    const segs = pathSegments(rel);
-    const program = segs[0];
-    const filename = segs[segs.length - 1];
-    const s = await stat(f);
-    const label = filename
-      .replace(/\.pdf$/i, "")
-      .replace(/[_]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-    syllabus.push({
-      id: `syllabus|${program}|${filename}`,
-      program,
-      label,
-      filename,
-      path: "/syllabus/" + rel.replace(/\\/g, "/"),
-      bytes: s.size,
-    });
+  // Load catalog (built separately by _scripts/catalog-build.ts)
+  let catalog: any = { entries: [] };
+  try {
+    catalog = (await import("../src/data/catalog.json")).default;
+  } catch {
+    process.stderr.write("No catalog.json — schemes/syllabus will be empty.\n");
   }
-  // Group syllabus by program for stats
-  const syllabusByProgram = new Map<string, number>();
-  for (const e of syllabus) syllabusByProgram.set(e.program, (syllabusByProgram.get(e.program) || 0) + 1);
+  const schemesCount = catalog.entries.filter((e: any) => e.schemeLocalPath).length;
+  const syllabusCount = catalog.entries.filter((e: any) => e.syllabusUrl).length;
 
-  const totalSize = papers.reduce((a, p) => a + p.bytes, 0) + syllabus.reduce((a, e) => a + e.bytes, 0);
+  // Programs with at least one scheme or syllabus
+  const programs = new Set<string>();
+  for (const e of catalog.entries as any[]) programs.add(e.program);
+
+  const totalSize = papers.reduce((a, p) => a + p.bytes, 0);
   const stats = {
     totalPapers: papers.length,
     totalSubjects: subjects.length,
-    totalSyllabus: syllabus.length,
+    totalSchemes: schemesCount,
+    totalSyllabus: syllabusCount,
     totalSizeBytes: totalSize,
     courses: tree.length,
-    syllabusPrograms: syllabusByProgram.size,
+    catalogPrograms: programs.size,
     generatedAt: new Date().toISOString(),
   };
 
   await mkdir(OUT_DIR, { recursive: true });
-  const json = JSON.stringify({ stats, tree, papers, subjects, syllabus }, null, 0);
+  const json = JSON.stringify({ stats, tree, papers, subjects, catalog: catalog.entries }, null, 0);
   await writeFile(OUT_FILE, json);
   await mkdir("public", { recursive: true });
   await writeFile("public/manifest.json", json);
@@ -225,8 +202,8 @@ async function main() {
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   const sizeKB = ((await stat(OUT_FILE)).size / 1024).toFixed(0);
   process.stderr.write(`\nWrote ${OUT_FILE} and public/manifest.json (${sizeKB} KB) in ${elapsed}s\n`);
-  process.stderr.write(`Papers: ${papers.length} | Subjects: ${subjects.length} | Syllabus: ${syllabus.length}\n`);
-  process.stderr.write(`Total size: ${(totalSize / 1024 / 1024).toFixed(1)} MB\n`);
+  process.stderr.write(`Papers: ${papers.length} | Subjects: ${subjects.length} | Schemes: ${schemesCount} | Syllabus: ${syllabusCount}\n`);
+  process.stderr.write(`Total PYQ size: ${(totalSize / 1024 / 1024).toFixed(1)} MB\n`);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
