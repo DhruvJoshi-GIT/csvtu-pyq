@@ -1,0 +1,93 @@
+---
+import Base from '../layouts/Base.astro';
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<Base title="Page not found — CSVTU PYQ">
+  <section class="container nf">
+    <div class="nf__inner fade-in">
+      <p class="eyebrow">404 — page not found</p>
+      <h1 class="nf__code">404</h1>
+      <p class="nf__lede">
+        That URL doesn't exist on this archive. The link might be old, the file may have been re-organized, or the URL was typed differently than the actual path.
+      </p>
+
+      <div class="nf__actions">
+        <a href={`${baseUrl}/`} class="nf__btn nf__btn--primary">← Back home</a>
+        <a href={`${baseUrl}/#pyq-courses`} class="nf__btn">Browse PYQs</a>
+        <a href={`${baseUrl}/schemes/`} class="nf__btn">Schemes</a>
+        <a href={`${baseUrl}/syllabus/`} class="nf__btn">Syllabus</a>
+      </div>
+
+      <p class="nf__hint">
+        Looking for a specific paper? Try the search bar on the
+        <a href={`${baseUrl}/`} style="color: var(--accent); text-decoration: underline;">home page</a> —
+        it does fuzzy matching on subject names and years.
+      </p>
+    </div>
+  </section>
+
+  <style>
+    .nf {
+      min-height: 60vh;
+      display: grid;
+      place-items: center;
+      padding: var(--s-7) var(--s-4);
+    }
+    .nf__inner {
+      text-align: center;
+      max-width: 560px;
+    }
+    .nf__code {
+      font-size: clamp(96px, 16vw, 160px);
+      font-weight: 800;
+      letter-spacing: -0.05em;
+      line-height: 1;
+      margin: var(--s-3) 0 var(--s-4);
+      background: linear-gradient(180deg, var(--accent), var(--accent-2));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+    .nf__lede {
+      font-size: clamp(15px, 2vw, 17px);
+      color: var(--text-1);
+      line-height: 1.6;
+    }
+    .nf__actions {
+      display: flex;
+      gap: var(--s-3);
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: var(--s-6);
+    }
+    .nf__btn {
+      padding: 12px 20px;
+      background: var(--bg-glass);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-0);
+      transition: all var(--t-fast);
+    }
+    .nf__btn:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-2);
+      transform: translateY(-1px);
+    }
+    .nf__btn--primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+    .nf__btn--primary:hover {
+      background: #6b4dff;
+      border-color: #6b4dff;
+    }
+    .nf__hint {
+      margin-top: var(--s-6);
+      font-size: 13px;
+      color: var(--text-2);
+    }
+  </style>
+</Base>

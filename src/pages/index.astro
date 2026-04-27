@@ -35,6 +35,9 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
     <p class="hero__lede fade-in" style="margin-top: var(--s-4); font-size: clamp(18px, 2.2vw, 22px); color: var(--text-0); max-width: 680px;">
       {stats.totalPapers.toLocaleString()} previous-year question papers, {stats.totalSchemes} curriculum schemes, and links to all CSVTU syllabuses. Browse, or just search by subject.
     </p>
+    <p class="unofficial-note fade-in">
+      <span class="unofficial-note__star">*</span>Unofficial student-built archive. Not affiliated with or endorsed by CSVTU.
+    </p>
 
     <div class="hero__stats fade-in">
       <div class="hero__stat">
@@ -80,7 +83,7 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
         </div>
         <div>
           <h2 class="cat-card__title">PYQs</h2>
-          <p class="cat-card__desc">{stats.totalPapers.toLocaleString()} papers · sorted by course → branch → sem → subject → year</p>
+          <p class="cat-card__desc">{stats.totalPapers.toLocaleString()} papers across {stats.courses} courses · grouped by course → branch → sem → subject → year</p>
           <span class="cat-card__cta">Browse ↓</span>
         </div>
       </a>
@@ -94,7 +97,7 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
         </div>
         <div>
           <h2 class="cat-card__title">Schemes</h2>
-          <p class="cat-card__desc">{stats.totalSchemes} curriculum scheme PDFs · which subjects in which sem · {stats.catalogPrograms} programs</p>
+          <p class="cat-card__desc">{stats.totalSchemes} curriculum scheme PDFs across {stats.catalogPrograms} programs · which subjects appear in which sem</p>
           <span class="cat-card__cta">Browse →</span>
         </div>
       </a>
@@ -108,7 +111,7 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
         </div>
         <div>
           <h2 class="cat-card__title">Syllabus</h2>
-          <p class="cat-card__desc">{stats.totalSyllabus} links to detailed syllabus pages · subject content on csvtu.ac.in</p>
+          <p class="cat-card__desc">{stats.totalSyllabus} links to CSVTU's detailed syllabus pages · subject-by-subject content</p>
           <span class="cat-card__cta">Browse →</span>
         </div>
       </a>
@@ -118,7 +121,7 @@ const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
   <section class="container section" id="pyq-courses">
     <div class="section__head">
       <h2 class="section__title">Browse PYQs by course</h2>
-      <span class="section__count">{stats.courses} courses · {stats.totalPapers.toLocaleString()} papers</span>
+      <span class="section__count">{stats.courses} courses with PYQs · {stats.totalPapers.toLocaleString()} papers</span>
     </div>
     <div class="grid grid--lg">
       {courseCards.map((c: any, i: number) => (
