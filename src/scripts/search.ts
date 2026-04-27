@@ -148,13 +148,12 @@ async function ensureLoaded(baseUrl: string): Promise<void> {
   if (!loadingPromise) {
     loadingPromise = (async () => {
       const res = await fetch(`${baseUrl}/manifest.json`);
+      if (!res.ok) throw new Error(`manifest fetch failed: ${res.status}`);
       const data = await res.json();
-      manifest = data;
       // Index subjects with friendly searchable text
       // We replace dashes with spaces so "mathematics-3" matches "math 3"
       const enrichedSubjects = data.subjects.map((s: SubjectIndex) => ({
         ...s,
-        // searchable copies (Fuse will index them)
         searchName: s.name.replace(/-/g, ' '),
         searchTopic: s.topic.replace(/-/g, ' '),
       }));
@@ -185,7 +184,13 @@ async function ensureLoaded(baseUrl: string): Promise<void> {
         ignoreLocation: true,
         minMatchCharLength: 2,
       });
-    })();
+      // Only commit manifest after indexes are built — readers gate on `manifest`
+      manifest = data;
+    })().catch(err => {
+      // Clear so next search retries instead of silently dying forever
+      loadingPromise = null;
+      throw err;
+    });
   }
   await loadingPromise;
 }
@@ -205,34 +210,45 @@ export function initSearch(baseUrl: string) {
   const resultsEl = document.getElementById('search-results') as HTMLDivElement | null;
   if (!input || !resultsEl) return;
 
-  let lastQuery = '';
   let debounce: any;
+  // Sequence guard: only the latest run is allowed to write to the DOM.
+  // Without this, a slow first run can finish AFTER a faster later run and
+  // overwrite fresh results with stale ones — which looks like "search broke
+  // after the first query".
+  let runSeq = 0;
 
   async function run(rawQuery: string) {
+    const mySeq = ++runSeq;
     const q = rawQuery.trim();
-    if (q === lastQuery) return;
-    lastQuery = q;
+
     if (q.length < 2) {
       resultsEl!.innerHTML = '';
       return;
     }
+
     if (!manifest) {
       resultsEl!.innerHTML = '<div class="empty">Loading subject index…</div>';
     }
-    await ensureLoaded(baseUrl);
+    try {
+      await ensureLoaded(baseUrl);
+    } catch {
+      if (mySeq === runSeq) {
+        resultsEl!.innerHTML = '<div class="empty">Couldn&rsquo;t load search index. Check your connection and try again.</div>';
+      }
+      return;
+    }
+    // A newer run started while we were awaiting — bail before writing.
+    if (mySeq !== runSeq) return;
 
-    // Extract year tokens before normalizing
     const { cleaned, years } = extractYears(q);
     const normalized = normalizeQuery(cleaned);
     const tokens = normalized.split(/\s+/).filter(t => t.length >= 2);
 
     let html = '';
 
-    // Subject results
     if (tokens.length > 0) {
       const pattern = tokens.join(' ');
       const subjResults = fuseSubjects!.search(pattern, { limit: 60 });
-      // If user gave a year, only keep subjects that have papers in that year
       const filtered = years.length > 0
         ? subjResults.filter(r => years.some(y => r.item.years.includes(y)))
         : subjResults;
@@ -242,7 +258,6 @@ export function initSearch(baseUrl: string) {
         html += '<div class="search__group-label">Subjects</div>';
         html += top.map(r => {
           const s = r.item;
-          // If years specified, link to subject page with #year-YYYY hash
           const href = years.length > 0
             ? `${baseUrl}${s.href}#year-${years[0]}`
             : `${baseUrl}${s.href}`;
@@ -259,7 +274,6 @@ export function initSearch(baseUrl: string) {
         }).join('');
       }
 
-      // Syllabus results — separate group, only if user query also matches
       const sylResults = fuseSyllabus!.search(pattern, { limit: 6 });
       if (sylResults.length > 0) {
         html += '<div class="search__group-label">Syllabus</div>';
@@ -276,17 +290,31 @@ export function initSearch(baseUrl: string) {
       }
     }
 
+    if (mySeq !== runSeq) return;
+
     if (!html) {
       resultsEl!.innerHTML = '<div class="empty">No matches. Try a subject name like &ldquo;mathematics&rdquo; or &ldquo;dbms&rdquo;.</div>';
-      return;
+    } else {
+      resultsEl!.innerHTML = html;
     }
-    resultsEl!.innerHTML = html;
+
+    // Mobile: virtual keyboard covers the bottom half. Pull the input to the
+    // top so the results below it are visible above the keyboard.
+    if (window.matchMedia('(max-width: 768px)').matches) {
+      input!.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
   }
 
-  input.addEventListener('input', () => {
+  const schedule = () => {
     clearTimeout(debounce);
     debounce = setTimeout(() => run(input.value), 120);
-  });
+  };
+  // `input` covers typing on every platform; `change` and `search` are
+  // belt-and-suspenders for mobile keyboards that batch input events
+  // (some Android IMEs only fire `input` on word commit).
+  input.addEventListener('input', schedule);
+  input.addEventListener('change', schedule);
+  input.addEventListener('search', schedule);
   input.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       const first = resultsEl!.querySelector('a.search__hit') as HTMLAnchorElement | null;
