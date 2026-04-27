@@ -453,10 +453,121 @@ h1, h2, h3, h4 {
   color: var(--text-2);
 }
 
-/* Mobile tweaks */
-@media (max-width: 600px) {
-  .hero { padding: var(--s-7) 0 var(--s-5); }
-  .hero__stats { gap: var(--s-4); }
-  .topic__body { grid-template-columns: 1fr; }
-  .paper { flex-wrap: wrap; }
+/* ─────────── Mobile (≤768px) ─────────── */
+@media (max-width: 768px) {
+  /* Container — tighter side padding */
+  .container { padding: 0 var(--s-3); }
+
+  /* Header — slimmer, slim logo, scroll-snap crumbs */
+  .site-header__inner { height: 56px; gap: var(--s-2); }
+  .logo { font-size: 15px; }
+  .logo__mark { width: 24px; height: 24px; font-size: 11px; }
+  .crumbs { font-size: 13px; flex-shrink: 1; min-width: 0; }
+  .crumbs a, .crumbs__current { white-space: nowrap; }
+
+  /* Hero — fits in one screen */
+  .hero { padding: var(--s-5) 0 var(--s-4); }
+  .hero h1 { font-size: clamp(28px, 8vw, 40px); }
+  .hero__lede { margin-top: var(--s-3); font-size: 15px; }
+  .hero__stats { gap: var(--s-4); margin-top: var(--s-4); }
+  .hero__stat-num { font-size: 22px; }
+  .hero__stat-label { font-size: 10px; }
+
+  /* Search — taller input, full-width tap */
+  .search { margin-top: var(--s-5); }
+  .search__input { padding: 16px 16px 16px 48px; font-size: 16px; border-radius: var(--r-md); }
+  .search__icon { left: 14px; }
+
+  /* Section heads */
+  .section { margin-top: var(--s-6); }
+  .section__title { font-size: 20px; }
+
+  /* Cards — denser padding, snug grid */
+  .grid { grid-template-columns: 1fr; gap: var(--s-3); }
+  .grid--lg { grid-template-columns: 1fr; gap: var(--s-3); }
+  .card { padding: var(--s-4); border-radius: var(--r-md); min-height: 88px; }
+  .card__title { font-size: 17px; }
+  .card__chip { top: var(--s-3); right: var(--s-3); padding: 3px 8px; font-size: 10px; }
+
+  /* Topic accordion — bigger tap area */
+  .topic { border-radius: var(--r-md); }
+  .topic__head { padding: var(--s-4) var(--s-4); min-height: 56px; }
+  .topic__name { font-size: 15px; }
+  .topic__meta { font-size: 12px; }
+  .topic__body { grid-template-columns: 1fr; padding: 0 var(--s-4) var(--s-4); }
+  .subject { padding: var(--s-3) var(--s-4); min-height: 56px; }
+  .subject__count { font-size: 11px; }
+
+  /* Paper row — title on top, full-width button below */
+  .paper {
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--s-3);
+    gap: var(--s-3);
+  }
+  .paper__title { font-size: 15px; }
+  .paper__meta {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    font-size: 11px;
+  }
+  .paper__btn {
+    align-self: stretch;
+    text-align: center;
+    padding: 12px 16px;
+    font-size: 14px;
+    border-radius: var(--r-md);
+  }
+  .paper:hover { transform: none; }
+
+  /* Year head — sticky-ish so context stays visible while scrolling a subject */
+  .year-head {
+    position: sticky;
+    top: 56px;
+    background: var(--bg-0);
+    z-index: 5;
+    padding: var(--s-2) 0;
+    margin-bottom: var(--s-2);
+  }
+  .year-head__num { font-size: 18px; }
+
+  /* Footer */
+  .site-footer { padding: var(--s-5) 0; }
+}
+
+/* ─────────── Very small phones (≤380px) ─────────── */
+@media (max-width: 380px) {
+  .crumbs { display: none; }    /* Header focuses on logo only on tiny screens */
+  .hero h1 { font-size: 26px; }
+  .hero__stats { gap: var(--s-3); }
+  .hero__stat-num { font-size: 20px; }
+}
+
+/* ─────────── Touch-only tweaks ─────────── */
+@media (hover: none) {
+  /* No hover transforms on touch devices — they look broken on tap */
+  .card:hover { transform: none; background: var(--bg-glass); border-color: var(--border); }
+  .card:hover::before { opacity: 0; }
+  .paper:hover { transform: none; }
+  .subject:hover { background: var(--bg-1); border-color: var(--border); }
+  .search__hit:hover { background: transparent; }
+  /* But keep an active state so taps feel responsive */
+  .card:active { background: var(--bg-2); transform: scale(0.99); }
+  .subject:active { border-color: var(--accent); background: var(--bg-2); }
+  .paper:active { background: var(--bg-2); }
+  .paper__btn:active { background: #6b4dff; transform: scale(0.97); }
+}
+
+/* ─────────── iOS safe-area for notch / home indicator ─────────── */
+@supports (padding: env(safe-area-inset-bottom)) {
+  body { padding-bottom: env(safe-area-inset-bottom); }
+  .site-header__inner {
+    padding-left: max(var(--s-4), env(safe-area-inset-left));
+    padding-right: max(var(--s-4), env(safe-area-inset-right));
+  }
+}
+
+/* ─────────── No double-tap zoom on interactive elements ─────────── */
+.card, .subject, .paper__btn, .topic__head, .search__input {
+  touch-action: manipulation;
 }
