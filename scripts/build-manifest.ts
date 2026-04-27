@@ -37,6 +37,42 @@ type Paper = {
 //   filename starts with "btech-"     → BTech
 //   contains code [cd]0NNNNN          → BTech (new scheme, post-2020)
 //   contains 6-digit numeric 3NNNNN   → BE (old scheme)
+// Re-route a paper to its real branch based on subject code. The EE folder
+// historically holds three different branches' papers mashed together
+// (EE / EEE / ET), distinguished by the 2-digit branch field embedded in
+// CSVTU's subject codes:
+//   3 24 X XX  ↔  c0/d0 24 X XX  → EE   (Electrical Engineering)
+//   3 25 X XX  ↔  c0/d0 25 X XX  → EEE  (Electrical & Electronics)
+//   3 28 X XX  ↔  c0/d0 28 X XX  → ET   (Electronics & Telecommunication)
+// We only override when the detected branch is one of {EE, EEE, ET} so we
+// don't accidentally rewrite branches we haven't audited.
+const ROUTE_BRANCHES = new Set(['EE', 'EEE', 'ET']);
+const BRANCH_DIGIT_MAP: Record<string, string> = {
+  '24': 'EE',
+  '25': 'EEE',
+  '28': 'ET',
+};
+
+function detectBranch(filename: string, course: string, folderBranch: string): string {
+  if (course !== 'BTech') return folderBranch;
+  const f = filename.toLowerCase();
+
+  // Subject code is the most reliable signal. Match either old-scheme
+  // 6-digit numeric (3XXXXX) or new-scheme c0/d0 + 5-digit prefix.
+  const codeMatch = f.match(/(?:^|[^a-z0-9])(?:[cd]0)?(\d{2})\d{4}(?:[^a-z0-9]|$)/);
+  if (codeMatch) {
+    const detected = BRANCH_DIGIT_MAP[codeMatch[1]];
+    if (detected && ROUTE_BRANCHES.has(detected)) return detected;
+  }
+
+  // Filename prefix fallback when the code didn't decisively classify.
+  if (/(?:^|[^a-z])eee-/.test(f)) return 'EEE';
+  if (/(?:^|[^a-z])et-/.test(f)) return 'ET';
+  if (/(?:^|[^a-z])ee-/.test(f)) return 'EE';
+
+  return folderBranch;
+}
+
 function detectDegree(filename: string, course: string): Degree | undefined {
   if (course !== 'BTech') return undefined;
   const f = filename.toLowerCase();
@@ -125,8 +161,10 @@ async function main() {
     const s = await stat(file);
     const id = rel.replace(/[\\/]/g, "__").replace(/\.pdf$/, "");
     const degree = detectDegree(parsed.filename, parsed.course);
+    const branch = detectBranch(parsed.filename, parsed.course, parsed.branch);
     papers.push({
       ...parsed,
+      branch,
       id,
       path: "/papers/" + rel.replace(/\\/g, "/"),
       bytes: s.size,
