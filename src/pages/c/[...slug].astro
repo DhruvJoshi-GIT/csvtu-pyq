@@ -197,12 +197,17 @@ let subjectByYear: Array<{ year: string; papers: any[] }> = [];
 
 if (view === 'subject') {
   const allPapers = (manifest as any).papers as any[];
+  // Aliased subjects pull papers from the canonical (source) location.
+  const paperCourse = subject.aliasOf?.course ?? course.name;
+  const paperBranch = subject.aliasOf?.branch ?? branch.name;
+  const paperSem = subject.aliasOf?.sem ?? sem.name;
+  const paperTopic = subject.aliasOf?.topic !== undefined ? subject.aliasOf.topic : subject.topic;
   subjectPapers = allPapers.filter(p =>
-    p.course === course.name &&
-    p.branch === branch.name &&
-    p.sem === sem.name &&
+    p.course === paperCourse &&
+    p.branch === paperBranch &&
+    p.sem === paperSem &&
     p.subject === subject.name &&
-    (subject.topic ? p.topic === subject.topic : !p.topic)
+    (paperTopic ? p.topic === paperTopic : !p.topic)
   );
 
   const byYearMap = new Map<string, any[]>();

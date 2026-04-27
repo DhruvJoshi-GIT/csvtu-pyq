@@ -3,6 +3,7 @@
 
 import { readdir, stat, mkdir, writeFile } from "node:fs/promises";
 import { join, relative } from "node:path";
+import { aliases as subjectAliases } from "./subject-aliases";
 
 const PAPERS_ROOT = "public/papers";
 const SYLLABUS_ROOT = "public/syllabus";
@@ -140,10 +141,73 @@ async function main() {
           topic: sub.topic,
           years: [...sub.years].sort(),
           count: sub.count,
-        })).sort((a, b) => a.name.localeCompare(b.name)),
+        } as any)).sort((a, b) => a.name.localeCompare(b.name)),
       })).sort((a, b) => a.name.localeCompare(b.name)),
     })).sort((a, b) => a.name.localeCompare(b.name)),
   })).sort((a, b) => a.name.localeCompare(b.name));
+
+  // ─── Apply subject aliases ────────────────────────────────────────
+  // Clone real subjects into extra sem slots so students looking in the
+  // "wrong" sem still find them. The cloned entry carries an `aliasOf` field
+  // so the subject page can resolve papers from the canonical location.
+  const touchedSems = new Set<any>();
+  for (const alias of subjectAliases) {
+    const { source, also_in } = alias;
+    const srcCourse = tree.find(c => c.name === source.course);
+    const srcBranch = srcCourse?.branches.find(b => b.name === source.branch);
+    const srcSem = srcBranch?.sems.find(s => s.name === source.sem);
+    const srcSubject = srcSem?.subjects.find((s: any) =>
+      s.name === source.subject && (s.topic || '') === (source.topic || '')
+    );
+    if (!srcSubject) {
+      process.stderr.write(`alias: source not found ${JSON.stringify(source)}\n`);
+      continue;
+    }
+    const canonicalHref = subjectHref({
+      course: source.course,
+      branch: source.branch,
+      sem: source.sem,
+      topic: source.topic || '',
+      subject: source.subject,
+    });
+
+    for (const dst of also_in) {
+      const dstCourseName = dst.course || source.course;
+      const dstBranchName = dst.branch || source.branch;
+      const dstCourse = tree.find(c => c.name === dstCourseName);
+      const dstBranch = dstCourse?.branches.find(b => b.name === dstBranchName);
+      const dstSem = dstBranch?.sems.find(s => s.name === dst.sem);
+      if (!dstSem) {
+        process.stderr.write(`alias: dst sem not found ${dstCourseName}/${dstBranchName}/${dst.sem}\n`);
+        continue;
+      }
+      const dstTopic = dst.topic || '';
+      const exists = dstSem.subjects.some((s: any) =>
+        s.name === srcSubject.name && (s.topic || '') === dstTopic
+      );
+      if (exists) continue;
+
+      dstSem.subjects.push({
+        name: srcSubject.name,
+        topic: dstTopic,
+        years: srcSubject.years.slice(),
+        count: srcSubject.count,
+        aliasOf: {
+          course: source.course,
+          branch: source.branch,
+          sem: source.sem,
+          topic: source.topic || '',
+          href: canonicalHref,
+        },
+      } as any);
+      if (dstTopic && !dstSem.topics.includes(dstTopic)) dstSem.topics.push(dstTopic);
+      touchedSems.add(dstSem);
+    }
+  }
+  for (const s of touchedSems) {
+    s.subjects.sort((a: any, b: any) => a.name.localeCompare(b.name));
+    s.topics.sort();
+  }
 
   // Build flat subjects index for search
   const subjects: SubjectIndex[] = [];
