@@ -100,6 +100,14 @@ function subjectHref(course: any, branch: any, sem: any, subject: any): string {
   return `${baseUrl}/c/${segs.join('/')}/`;
 }
 
+// Renders the small BE/BTech/Mixed chip; null when no era is known.
+function eraChip(era: string | undefined): { label: string; cls: string } | null {
+  if (era === 'BE') return { label: 'BE legacy', cls: 'era era--be' };
+  if (era === 'BTech') return { label: 'BTech', cls: 'era era--btech' };
+  if (era === 'mixed') return { label: 'BE + BTech', cls: 'era era--mixed' };
+  return null;
+}
+
 // ============ Course view data ============
 type CourseCard = { name: string; sub: string | undefined; desc: string; papers: number; href: string };
 let courseCards: CourseCard[] = [];
@@ -357,12 +365,18 @@ if (view === 'course') {
                   </span>
                 </summary>
                 <div class="topic__body">
-                  {topic.subjects.map((s: any) => (
-                    <a href={subjectHref(course, branch, sem, s)} class="subject">
-                      <span class="subject__name">{s.name.replace(/-/g, ' ')}</span>
-                      <span class="subject__count">{s.count} paper{s.count === 1 ? '' : 's'} · {s.years.length} year{s.years.length === 1 ? '' : 's'}</span>
-                    </a>
-                  ))}
+                  {topic.subjects.map((s: any) => {
+                    const chip = eraChip(s.era);
+                    return (
+                      <a href={subjectHref(course, branch, sem, s)} class="subject">
+                        <span class="subject__name">
+                          {s.name.replace(/-/g, ' ')}
+                          {chip && <span class={chip.cls}>{chip.label}</span>}
+                        </span>
+                        <span class="subject__count">{s.count} paper{s.count === 1 ? '' : 's'} · {s.years.length} year{s.years.length === 1 ? '' : 's'}</span>
+                      </a>
+                    );
+                  })}
                 </div>
               </details>
             ))}
@@ -377,13 +391,19 @@ if (view === 'course') {
             <span class="section__count">{semUngrouped.length} subjects</span>
           </div>
           <div class="grid">
-            {semUngrouped.map((s, i) => (
-              <a href={subjectHref(course, branch, sem, s)} class="card fade-in" style={`animation-delay:${30 * (i % 9)}ms`}>
-                <span class="card__chip">{s.count}</span>
-                <h3 class="card__title">{s.name.replace(/-/g, ' ')}</h3>
-                <p class="card__desc">{s.years.length} year{s.years.length === 1 ? '' : 's'}</p>
-              </a>
-            ))}
+            {semUngrouped.map((s, i) => {
+              const chip = eraChip(s.era);
+              return (
+                <a href={subjectHref(course, branch, sem, s)} class="card fade-in" style={`animation-delay:${30 * (i % 9)}ms`}>
+                  <span class="card__chip">{s.count}</span>
+                  <h3 class="card__title">{s.name.replace(/-/g, ' ')}</h3>
+                  <p class="card__desc">
+                    {s.years.length} year{s.years.length === 1 ? '' : 's'}
+                    {chip && <span class={chip.cls} style="margin-left:8px;">{chip.label}</span>}
+                  </p>
+                </a>
+              );
+            })}
           </div>
         </div>
       )}
@@ -405,6 +425,16 @@ if (view === 'course') {
         <p class="hero__lede fade-in">
           {subjectPapers.length} paper{subjectPapers.length === 1 ? '' : 's'} · {subjectByYear.length} year{subjectByYear.length === 1 ? '' : 's'}
         </p>
+        {subject.era === 'BE' && (
+          <p class="era-banner era-banner--be fade-in">
+            <strong>Legacy BE scheme.</strong> All papers here are from CSVTU's pre-2020 BE (Bachelor of Engineering) curriculum. The current BTech scheme uses different subject codes and may not include this subject in the same semester.
+          </p>
+        )}
+        {subject.era === 'mixed' && (
+          <p class="era-banner era-banner--mixed fade-in">
+            <strong>Mixed scheme.</strong> Includes papers from both the older BE curriculum and the current BTech curriculum. Each paper below is tagged with its scheme.
+          </p>
+        )}
         <p class="muted fade-in" style="margin-top: var(--s-3); font-size: 14px;">
           Tap a year to expand its papers.
         </p>
@@ -429,10 +459,16 @@ if (view === 'course') {
                   const month = monthMatch ? monthMatch[1].toUpperCase() : '';
                   const sizeKB = (p.bytes / 1024).toFixed(0);
                   const label = month ? `${month} ${yearGroup.year}` : prettyName(p.filename.replace(/\.pdf$/, ''));
+                  const paperChip = p.degree === 'BE' ? { label: 'BE', cls: 'era era--be era--paper' }
+                    : p.degree === 'BTech' ? { label: 'BTech', cls: 'era era--btech era--paper' }
+                    : null;
                   return (
                     <div class="paper">
                       <div style="flex: 1; min-width: 0;">
-                        <div class="paper__title">{label}</div>
+                        <div class="paper__title">
+                          {label}
+                          {paperChip && <span class={paperChip.cls}>{paperChip.label}</span>}
+                        </div>
                         <div class="paper__meta">{sizeKB} KB · {p.filename}</div>
                       </div>
                       <a class="paper__btn" href={`${baseUrl}${p.path}`} target="_blank" rel="noopener">View PDF</a>

@@ -10,6 +10,9 @@ const SYLLABUS_ROOT = "public/syllabus";
 const OUT_DIR = "src/data";
 const OUT_FILE = "src/data/manifest.json";
 
+type Degree = 'BE' | 'BTech';
+type Era = 'BE' | 'BTech' | 'mixed';
+
 type Paper = {
   id: string;
   course: string;
@@ -21,7 +24,29 @@ type Paper = {
   filename: string;
   path: string;
   bytes: number;
+  degree?: Degree;
 };
+
+// Classify a paper's degree from its filename. CSVTU transitioned BE → BTech
+// around 2019-2020 with new subject-code format; older BE papers persist in
+// the archive under the same "BTech" course folder and confuse students who
+// only study the current scheme.
+//
+// Rules (BTech course only — Diploma/MTech etc. don't carry the chip):
+//   filename starts with "be-"        → BE
+//   filename starts with "btech-"     → BTech
+//   contains code [cd]0NNNNN          → BTech (new scheme, post-2020)
+//   contains 6-digit numeric 3NNNNN   → BE (old scheme)
+function detectDegree(filename: string, course: string): Degree | undefined {
+  if (course !== 'BTech') return undefined;
+  const f = filename.toLowerCase();
+  if (f.startsWith('be-')) return 'BE';
+  if (f.startsWith('btech-')) return 'BTech';
+  // Word-boundary match so we don't catch fragments inside other tokens.
+  if (/(^|[^a-z0-9])[cd]0\d{5}([^a-z0-9]|$)/.test(f)) return 'BTech';
+  if (/(^|[^a-z0-9])3\d{5}([^a-z0-9]|$)/.test(f)) return 'BE';
+  return undefined;
+}
 
 type SubjectIndex = {
   id: string;
@@ -99,16 +124,21 @@ async function main() {
     const parsed = parsePath(segments);
     const s = await stat(file);
     const id = rel.replace(/[\\/]/g, "__").replace(/\.pdf$/, "");
+    const degree = detectDegree(parsed.filename, parsed.course);
     papers.push({
       ...parsed,
       id,
       path: "/papers/" + rel.replace(/\\/g, "/"),
       bytes: s.size,
+      ...(degree ? { degree } : {}),
     });
   }
 
   // Build hierarchy index
-  type SubjectNode = { name: string; topic: string; years: Set<string>; count: number };
+  type SubjectNode = {
+    name: string; topic: string; years: Set<string>; count: number;
+    eraCount: { BE: number; BTech: number; unknown: number };
+  };
   type SemNode = { name: string; subjects: Map<string, SubjectNode>; topics: Set<string> };
   type BranchNode = { name: string; sems: Map<string, SemNode> };
   type CourseNode = { name: string; branches: Map<string, BranchNode> };
@@ -122,11 +152,25 @@ async function main() {
     if (!b.sems.has(p.sem)) b.sems.set(p.sem, { name: p.sem, subjects: new Map(), topics: new Set() });
     const s = b.sems.get(p.sem)!;
     const subjKey = p.topic ? `${p.topic}/${p.subject}` : p.subject;
-    if (!s.subjects.has(subjKey)) s.subjects.set(subjKey, { name: p.subject, topic: p.topic, years: new Set(), count: 0 });
+    if (!s.subjects.has(subjKey)) s.subjects.set(subjKey, {
+      name: p.subject, topic: p.topic, years: new Set(), count: 0,
+      eraCount: { BE: 0, BTech: 0, unknown: 0 },
+    });
     const subj = s.subjects.get(subjKey)!;
     subj.years.add(p.year);
     subj.count++;
+    subj.eraCount[p.degree ?? 'unknown']++;
     if (p.topic) s.topics.add(p.topic);
+  }
+
+  // Pick a single era summary per subject. A subject is "BE" or "BTech" only
+  // if the OTHER known degree has zero papers; anything else with both is
+  // "mixed". Subjects with only unknown-era papers get no summary.
+  function subjectEra(c: { BE: number; BTech: number; unknown: number }): Era | undefined {
+    if (c.BE > 0 && c.BTech > 0) return 'mixed';
+    if (c.BE > 0) return 'BE';
+    if (c.BTech > 0) return 'BTech';
+    return undefined;
   }
 
   const tree = [...courses.values()].map(c => ({
@@ -136,12 +180,16 @@ async function main() {
       sems: [...b.sems.values()].map(s => ({
         name: s.name,
         topics: [...s.topics].sort(),
-        subjects: [...s.subjects.values()].map(sub => ({
-          name: sub.name,
-          topic: sub.topic,
-          years: [...sub.years].sort(),
-          count: sub.count,
-        } as any)).sort((a, b) => a.name.localeCompare(b.name)),
+        subjects: [...s.subjects.values()].map(sub => {
+          const era = subjectEra(sub.eraCount);
+          return {
+            name: sub.name,
+            topic: sub.topic,
+            years: [...sub.years].sort(),
+            count: sub.count,
+            ...(era ? { era } : {}),
+          } as any;
+        }).sort((a, b) => a.name.localeCompare(b.name)),
       })).sort((a, b) => a.name.localeCompare(b.name)),
     })).sort((a, b) => a.name.localeCompare(b.name)),
   })).sort((a, b) => a.name.localeCompare(b.name));

@@ -704,6 +704,60 @@ h1, h2, h3, h4 {
   color: #8de0ff;
 }
 
+/* ─────────── Era chips (BE legacy / BTech / mixed) ─────────── */
+.era {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.era--be {
+  background: rgba(255,170,80,0.15);
+  color: #ffc88a;
+  border: 1px solid rgba(255,170,80,0.3);
+}
+.era--btech {
+  background: rgba(80,220,140,0.15);
+  color: #8eedb4;
+  border: 1px solid rgba(80,220,140,0.3);
+}
+.era--mixed {
+  background: rgba(180,160,255,0.15);
+  color: #c4b8ff;
+  border: 1px solid rgba(180,160,255,0.3);
+}
+.era--paper {
+  font-size: 9px;
+  padding: 1px 6px;
+  margin-left: 6px;
+}
+.era-banner {
+  margin-top: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--r-md);
+  font-size: 14px;
+  line-height: 1.5;
+  border: 1px solid;
+}
+.era-banner--be {
+  background: rgba(255,170,80,0.08);
+  border-color: rgba(255,170,80,0.25);
+  color: var(--text-1);
+}
+.era-banner--be strong { color: #ffc88a; }
+.era-banner--mixed {
+  background: rgba(180,160,255,0.08);
+  border-color: rgba(180,160,255,0.25);
+  color: var(--text-1);
+}
+.era-banner--mixed strong { color: #c4b8ff; }
+
 /* Animation */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }
