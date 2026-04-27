@@ -1,0 +1,365 @@
+---
+import Base from '../../layouts/Base.astro';
+import manifest from '../../data/manifest.json';
+
+const baseUrl = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+export async function getStaticPaths() {
+  const m = (await import('../../data/manifest.json')).default as any;
+  const paths: any[] = [];
+
+  for (const course of m.tree) {
+    paths.push({
+      params: { slug: encodeURIComponent(course.name) },
+      props: { view: 'course', course },
+    });
+
+    const isSingleBranch = course.branches.length === 1 && course.branches[0].name === '_';
+
+    for (const branch of course.branches) {
+      if (!isSingleBranch) {
+        paths.push({
+          params: { slug: `${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}` },
+          props: { view: 'branch', course, branch },
+        });
+      }
+
+      for (const sem of branch.sems) {
+        const slugParts = isSingleBranch
+          ? `${encodeURIComponent(course.name)}/${encodeURIComponent(sem.name)}`
+          : `${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}/${encodeURIComponent(sem.name)}`;
+        paths.push({
+          params: { slug: slugParts },
+          props: { view: 'sem', course, branch, sem },
+        });
+      }
+    }
+  }
+
+  return paths;
+}
+
+const props = Astro.props as any;
+const view = props.view as 'course' | 'branch' | 'sem';
+const course = props.course;
+const branch = props.branch;
+const sem = props.sem;
+
+// ============ Helpers ============
+function paperCount(branch: any): number {
+  let n = 0;
+  for (const s of branch.sems) for (const sub of s.subjects) n += sub.count;
+  return n;
+}
+function semPaperCount(sem: any): number {
+  let n = 0;
+  for (const sub of sem.subjects) n += sub.count;
+  return n;
+}
+function semLabel(name: string): string {
+  return name.replace('Sem-', 'Semester ').replace('1st-Year', '1st Year').replace('Unknown-Sem', 'Other');
+}
+function isSingleBranch(c: any): boolean {
+  return c.branches.length === 1 && c.branches[0].name === '_';
+}
+
+// ============ Course view data ============
+let courseTotalPapers = 0;
+let courseSingleBranchSems: any[] = [];
+let courseBranchCards: any[] = [];
+if (view === 'course') {
+  for (const b of course.branches) courseTotalPapers += paperCount(b);
+  if (isSingleBranch(course)) {
+    courseSingleBranchSems = course.branches[0].sems.map((s: any) => ({
+      name: s.name,
+      label: semLabel(s.name),
+      papers: semPaperCount(s),
+      subjects: s.subjects.length,
+      href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(s.name)}/`,
+    }));
+  } else {
+    courseBranchCards = course.branches.map((b: any) => ({
+      name: b.name,
+      papers: paperCount(b),
+      sems: b.sems.length,
+      href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(b.name)}/`,
+    }));
+  }
+}
+
+// ============ Branch view data ============
+let branchSemCards: any[] = [];
+let branchTotalPapers = 0;
+if (view === 'branch') {
+  branchTotalPapers = paperCount(branch);
+  branchSemCards = branch.sems.map((s: any) => ({
+    name: s.name,
+    label: semLabel(s.name),
+    papers: semPaperCount(s),
+    subjects: s.subjects.length,
+    href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}/${encodeURIComponent(s.name)}/`,
+  }));
+}
+
+// ============ Sem view data ============
+let semTopics: Array<{ name: string; subjects: any[]; subjectCount: number; paperCount: number }> = [];
+let semUngrouped: any[] = [];
+let semPapersBySubject: Array<{ subjectKey: string; subjectName: string; subjectPapers: any[]; byYear: Array<{ year: string; papers: any[] }>; anchorId: string }> = [];
+let semTotalPapers = 0;
+
+if (view === 'sem') {
+  // Group subjects by topic
+  const byTopic = new Map<string, any[]>();
+  for (const s of sem.subjects) {
+    if (s.topic) {
+      if (!byTopic.has(s.topic)) byTopic.set(s.topic, []);
+      byTopic.get(s.topic)!.push(s);
+    } else {
+      semUngrouped.push(s);
+    }
+  }
+  semTopics = [...byTopic.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([topicName, subjects]) => ({
+      name: topicName,
+      subjects,
+      subjectCount: subjects.length,
+      paperCount: subjects.reduce((a: number, s: any) => a + s.count, 0),
+    }));
+
+  // Get papers for this sem
+  const allPapers = (manifest as any).papers as any[];
+  const branchFilter = isSingleBranch(course) ? '_' : branch.name;
+  const semPapers = allPapers.filter(p =>
+    p.course === course.name && p.branch === branchFilter && p.sem === sem.name
+  );
+  semTotalPapers = semPapers.length;
+
+  // Group by subject (then year)
+  const bySubject = new Map<string, any[]>();
+  for (const p of semPapers) {
+    const key = (p.topic ? p.topic + '/' : '') + p.subject;
+    if (!bySubject.has(key)) bySubject.set(key, []);
+    bySubject.get(key)!.push(p);
+  }
+  semPapersBySubject = [...bySubject.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([subjectKey, papers]) => {
+      const subjectName = subjectKey.includes('/') ? subjectKey.split('/')[1] : subjectKey;
+      const anchorId = 'subject-' + subjectKey.replace(/[^a-z0-9]/gi, '-');
+      const byYearMap = new Map<string, any[]>();
+      for (const p of papers) {
+        if (!byYearMap.has(p.year)) byYearMap.set(p.year, []);
+        byYearMap.get(p.year)!.push(p);
+      }
+      const byYear = [...byYearMap.entries()]
+        .sort((a, b) => b[0].localeCompare(a[0]))
+        .map(([year, papers]) => ({ year, papers }));
+      return { subjectKey, subjectName, subjectPapers: papers, byYear, anchorId };
+    });
+}
+
+// ============ Crumbs + title ============
+let crumbs: Array<{ label: string; href?: string }> = [{ label: 'Home', href: `${baseUrl}/` }];
+let title = '';
+
+if (view === 'course') {
+  crumbs.push({ label: course.name });
+  title = `${course.name} — CSVTU PYQ`;
+} else if (view === 'branch') {
+  crumbs.push({ label: course.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/` });
+  crumbs.push({ label: branch.name });
+  title = `${course.name} ${branch.name} — CSVTU PYQ`;
+} else {
+  crumbs.push({ label: course.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/` });
+  if (branch.name !== '_') {
+    crumbs.push({ label: branch.name, href: `${baseUrl}/c/${encodeURIComponent(course.name)}/${encodeURIComponent(branch.name)}/` });
+  }
+  crumbs.push({ label: semLabel(sem.name) });
+  title = `${course.name}${branch.name === '_' ? '' : ' ' + branch.name} ${semLabel(sem.name)} — CSVTU PYQ`;
+}
+
+const courseHasBranches = view === 'course' && !isSingleBranch(course);
+---
+<Base title={title} crumbs={crumbs}>
+  {view === 'course' && (
+    <section class="container">
+      <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-5);">
+        <p class="eyebrow fade-in">Course</p>
+        <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">{course.name}</h1>
+        <p class="hero__lede fade-in">
+          {courseHasBranches
+            ? `${course.branches.length} branches · ${courseTotalPapers.toLocaleString()} papers`
+            : `${courseSingleBranchSems.length} semester${courseSingleBranchSems.length === 1 ? '' : 's'} · ${courseTotalPapers.toLocaleString()} papers`}
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section__head">
+          <h2 class="section__title">{courseHasBranches ? 'Branches' : 'Semesters'}</h2>
+        </div>
+
+        {courseHasBranches ? (
+          <div class="grid">
+            {courseBranchCards.map((b, i) => (
+              <a href={b.href} class="card fade-in" style={`animation-delay:${50 * (i % 9)}ms`}>
+                <span class="card__chip">{b.papers}</span>
+                <h3 class="card__title">{b.name}</h3>
+                <p class="card__desc">{b.sems} semester{b.sems === 1 ? '' : 's'}</p>
+                <div class="card__stats"><span>{b.papers.toLocaleString()} papers</span></div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div class="grid">
+            {courseSingleBranchSems.map((s, i) => (
+              <a href={s.href} class="card fade-in" style={`animation-delay:${50 * (i % 9)}ms`}>
+                <span class="card__chip">{s.papers}</span>
+                <h3 class="card__title">{s.label}</h3>
+                <p class="card__desc">{s.subjects} subject{s.subjects === 1 ? '' : 's'}</p>
+                <div class="card__stats"><span>{s.papers.toLocaleString()} papers</span></div>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  )}
+
+  {view === 'branch' && (
+    <section class="container">
+      <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-5);">
+        <p class="eyebrow fade-in">{course.name}</p>
+        <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">{branch.name}</h1>
+        <p class="hero__lede fade-in">
+          {branchSemCards.length} semester{branchSemCards.length === 1 ? '' : 's'} · {branchTotalPapers.toLocaleString()} papers
+        </p>
+      </div>
+
+      <div class="section">
+        <div class="section__head">
+          <h2 class="section__title">Semesters</h2>
+        </div>
+        <div class="grid">
+          {branchSemCards.map((s, i) => (
+            <a href={s.href} class="card fade-in" style={`animation-delay:${50 * (i % 9)}ms`}>
+              <span class="card__chip">{s.papers}</span>
+              <h3 class="card__title">{s.label}</h3>
+              <p class="card__desc">{s.subjects} subject{s.subjects === 1 ? '' : 's'}</p>
+              <div class="card__stats"><span>{s.papers.toLocaleString()} papers</span></div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )}
+
+  {view === 'sem' && (
+    <section class="container">
+      <div class="hero" style="padding-top: var(--s-7); padding-bottom: var(--s-5);">
+        <p class="eyebrow fade-in">
+          {course.name}{branch.name !== '_' ? ` · ${branch.name}` : ''}
+        </p>
+        <h1 class="fade-in" style="margin-top: var(--s-2); font-size: clamp(32px, 5vw, 56px);">
+          {semLabel(sem.name)}
+        </h1>
+        <p class="hero__lede fade-in">
+          {sem.subjects.length} subject{sem.subjects.length === 1 ? '' : 's'} · {semTotalPapers.toLocaleString()} papers
+        </p>
+      </div>
+
+      {semTopics.length > 0 && (
+        <div class="section">
+          <div class="section__head">
+            <h2 class="section__title">Topics</h2>
+            <span class="section__count">{semTopics.length} topics</span>
+          </div>
+          <div class="stack">
+            {semTopics.map((topic, i) => (
+              <details class="topic fade-in" style={`animation-delay:${40 * (i % 9)}ms`} open={i === 0}>
+                <summary class="topic__head">
+                  <span class="row" style="gap: var(--s-3);">
+                    <svg class="topic__caret" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                      <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                    <span class="topic__name">{topic.name.replace(/-/g, ' ')}</span>
+                  </span>
+                  <span class="topic__meta">
+                    {topic.subjectCount} subject{topic.subjectCount === 1 ? '' : 's'} · {topic.paperCount} papers
+                  </span>
+                </summary>
+                <div class="topic__body">
+                  {topic.subjects.map((s: any) => (
+                    <a href={`#subject-${(s.topic + '__' + s.name).replace(/[^a-z0-9]/gi, '-')}`} class="subject">
+                      {s.name.replace(/-/g, ' ')}
+                      <span class="subject__count">{s.count} paper{s.count === 1 ? '' : 's'} · {s.years.length} year{s.years.length === 1 ? '' : 's'}</span>
+                    </a>
+                  ))}
+                </div>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {semUngrouped.length > 0 && (
+        <div class="section">
+          <div class="section__head">
+            <h2 class="section__title">Other subjects</h2>
+            <span class="section__count">{semUngrouped.length} subjects</span>
+          </div>
+          <div class="grid">
+            {semUngrouped.map((s, i) => (
+              <a href={`#subject-${('__' + s.name).replace(/[^a-z0-9]/gi, '-')}`} class="card fade-in" style={`animation-delay:${30 * (i % 9)}ms`}>
+                <span class="card__chip">{s.count}</span>
+                <h3 class="card__title">{s.name.replace(/-/g, ' ')}</h3>
+                <p class="card__desc">{s.years.length} year{s.years.length === 1 ? '' : 's'}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div class="section">
+        <div class="section__head">
+          <h2 class="section__title">Papers</h2>
+          <span class="section__count">{semTotalPapers.toLocaleString()} papers</span>
+        </div>
+
+        {semPapersBySubject.map((subj) => (
+          <div id={subj.anchorId} style="margin-top: var(--s-6); scroll-margin-top: 80px;">
+            <h3 style="font-size: 20px; text-transform: capitalize; margin-bottom: var(--s-4); letter-spacing: -0.01em;">
+              {subj.subjectName.replace(/-/g, ' ')}
+              <span style="font-size: 13px; color: var(--text-2); font-weight: 400; margin-left: var(--s-3);">
+                {subj.subjectPapers.length} paper{subj.subjectPapers.length === 1 ? '' : 's'}
+              </span>
+            </h3>
+            {subj.byYear.map((yearGroup) => (
+              <div class="year-block">
+                <div class="year-head">
+                  <span class="year-head__num">{yearGroup.year === 'unknown-year' ? '—' : yearGroup.year}</span>
+                  <span class="year-head__count">{yearGroup.papers.length} paper{yearGroup.papers.length === 1 ? '' : 's'}</span>
+                </div>
+                {yearGroup.papers.map((p: any) => {
+                  const monthMatch = p.filename.match(/-(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)-/i);
+                  const month = monthMatch ? monthMatch[1].toUpperCase() : '';
+                  const sizeKB = (p.bytes / 1024).toFixed(0);
+                  const label = month ? `${month} ${yearGroup.year}` : p.filename.replace(/\.pdf$/, '').replace(/-/g, ' ');
+                  return (
+                    <div class="paper">
+                      <div>
+                        <div class="paper__title">{label}</div>
+                        <div class="paper__meta">{sizeKB} KB · {p.filename}</div>
+                      </div>
+                      <a class="paper__btn" href={`${baseUrl}${p.path}`} target="_blank" rel="noopener">View PDF</a>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  )}
+</Base>

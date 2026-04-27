@@ -1,0 +1,29 @@
+# Build output
+dist/
+.astro/
+
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.production
+
+# macOS-specific files
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# Temp scrape artifacts (kept locally, not pushed)
+_scripts/*.tsv
+_scripts/*.log
+_scripts/*.out
+_scripts/*.html

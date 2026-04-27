@@ -1,0 +1,71 @@
+---
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description?: string;
+  crumbs?: Array<{ label: string; href?: string }>;
+}
+const { title, description = 'Previous year question papers for CSVTU — BTech, Diploma, MBA, MCA, MTech, BCA, Pharmacy.', crumbs = [] } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content={description} />
+  <meta name="theme-color" content="#07080c" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <title>{title}</title>
+  <meta property="og:title" content={title} />
+  <meta property="og:description" content={description} />
+  <meta property="og:type" content="website" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a href={base + '/'} class="logo">
+        <span class="logo__mark">P</span>
+        <span>CSVTU PYQ</span>
+      </a>
+      {crumbs.length > 0 && (
+        <nav class="crumbs" aria-label="Breadcrumb">
+          {crumbs.map((c, i) => (
+            <>
+              {i > 0 && <span class="crumbs__sep">/</span>}
+              {c.href ? <a href={c.href}>{c.label}</a> : <span class="crumbs__current">{c.label}</span>}
+            </>
+          ))}
+        </nav>
+      )}
+    </div>
+  </header>
+
+  <main>
+    <slot />
+  </main>
+
+  <footer class="site-footer">
+    <div class="container">
+      <p>CSVTU PYQ — Previous Year Question Papers</p>
+      <p style="margin-top: 6px; font-size: 12px;">
+        Sourced from public university archives. Built with Astro · <a href="https://github.com/DhruvJoshi-GIT/csvtu-pyq" target="_blank" rel="noopener">GitHub</a>
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    // Card hover spotlight effect
+    document.addEventListener('mousemove', (e) => {
+      const target = (e.target as HTMLElement)?.closest?.('.card') as HTMLElement | null;
+      if (!target) return;
+      const rect = target.getBoundingClientRect();
+      target.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+      target.style.setProperty('--my', `${e.clientY - rect.top}px`);
+    });
+  </script>
+</body>
+</html>

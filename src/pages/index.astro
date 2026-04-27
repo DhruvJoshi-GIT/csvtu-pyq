@@ -1,0 +1,160 @@
+---
+import Base from '../layouts/Base.astro';
+import manifest from '../data/manifest.json';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const { stats, tree } = manifest as any;
+
+// Compute paper counts per course
+const courseCards = tree.map((c: any) => {
+  const branchCount = c.branches.filter((b: any) => b.name !== '_').length;
+  let paperCount = 0;
+  let semSet = new Set<string>();
+  for (const b of c.branches) {
+    for (const s of b.sems) {
+      semSet.add(s.name);
+      for (const subj of s.subjects) paperCount += subj.count;
+    }
+  }
+  return {
+    name: c.name,
+    branches: branchCount,
+    sems: semSet.size,
+    papers: paperCount,
+    href: `${base}/c/${encodeURIComponent(c.name)}/`,
+  };
+}).sort((a: any, b: any) => b.papers - a.papers);
+
+const totalSize = (stats.totalSizeBytes / 1024 / 1024).toFixed(0);
+---
+<Base title="CSVTU PYQ — Previous Year Question Papers">
+  <section class="container hero">
+    <p class="eyebrow fade-in">CSVTU · question paper archive</p>
+    <h1 class="fade-in" style="margin-top: var(--s-3);">Every paper. Every year. One place.</h1>
+    <p class="hero__lede fade-in">
+      {stats.totalPapers.toLocaleString()} previous-year question papers across BTech, Diploma, MBA, MCA, MTech, BCA, and Pharmacy. Browse by course, branch, semester, and subject — or just search.
+    </p>
+
+    <div class="hero__stats fade-in">
+      <div class="hero__stat">
+        <span class="hero__stat-num">{stats.totalPapers.toLocaleString()}</span>
+        <span class="hero__stat-label">Papers</span>
+      </div>
+      <div class="hero__stat">
+        <span class="hero__stat-num">{stats.courses}</span>
+        <span class="hero__stat-label">Courses</span>
+      </div>
+      <div class="hero__stat">
+        <span class="hero__stat-num">{totalSize} MB</span>
+        <span class="hero__stat-label">Archive size</span>
+      </div>
+    </div>
+
+    <div class="search fade-in" style="--anim-delay: 200ms;">
+      <svg class="search__icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input
+        id="search-input"
+        type="search"
+        class="search__input"
+        placeholder="Search papers — e.g. 'mathematics 3', 'cyber security', '2019'…"
+        autocomplete="off"
+      />
+      <div id="search-results" class="search__results" role="listbox"></div>
+    </div>
+  </section>
+
+  <section class="container section">
+    <div class="section__head">
+      <h2 class="section__title">Browse by course</h2>
+      <span class="section__count">{stats.courses} courses · {stats.totalPapers.toLocaleString()} papers</span>
+    </div>
+    <div class="grid grid--lg">
+      {courseCards.map((c: any, i: number) => (
+        <a href={c.href} class="card fade-in" style={`animation-delay:${60 * (i % 9)}ms`}>
+          <span class="card__chip">{c.papers}</span>
+          <h3 class="card__title">{c.name}</h3>
+          <p class="card__desc">
+            {c.branches > 0 ? `${c.branches} ${c.branches === 1 ? 'branch' : 'branches'} · ` : ''}
+            {c.sems} {c.sems === 1 ? 'semester' : 'semesters'}
+          </p>
+          <div class="card__stats">
+            <span>{c.papers.toLocaleString()} papers</span>
+          </div>
+        </a>
+      ))}
+    </div>
+  </section>
+
+  <script>
+    // Lazy-load full paper list for search
+    const input = document.getElementById('search-input') as HTMLInputElement;
+    const resultsEl = document.getElementById('search-results') as HTMLDivElement;
+    const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+    let papers: any[] | null = null;
+    let manifestLoading: Promise<void> | null = null;
+
+    async function loadPapers() {
+      if (papers) return;
+      if (!manifestLoading) {
+        manifestLoading = (async () => {
+          // Manifest is bundled — but we can also fetch a runtime copy.
+          // Easier: import the same JSON via static asset path.
+          const res = await fetch(`${base}/manifest.json`);
+          const data = await res.json();
+          papers = data.papers;
+        })();
+      }
+      await manifestLoading;
+    }
+
+    function escapeHtml(s: string) {
+      return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+    }
+
+    function format(p: any) {
+      const subj = p.subject.replace(/-/g, ' ');
+      const sem = p.sem.replace('Sem-', 'Sem ');
+      const branch = p.branch === '_' ? '' : ` · ${p.branch}`;
+      const year = p.year !== 'unknown-year' ? ` · ${p.year}` : '';
+      return {
+        title: subj,
+        meta: `${p.course}${branch} · ${sem}${year}`,
+      };
+    }
+
+    let lastQuery = '';
+    let debounce: any;
+    input.addEventListener('input', () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(async () => {
+        const q = input.value.trim().toLowerCase();
+        if (q === lastQuery) return;
+        lastQuery = q;
+        if (q.length < 2) { resultsEl.innerHTML = ''; return; }
+        await loadPapers();
+        const tokens = q.split(/\s+/);
+        const matches = papers!.filter(p => {
+          const hay = `${p.subject} ${p.course} ${p.branch} ${p.sem} ${p.year} ${p.topic}`.toLowerCase();
+          return tokens.every(t => hay.includes(t));
+        }).slice(0, 30);
+        if (matches.length === 0) {
+          resultsEl.innerHTML = '<div class="empty">No papers match.</div>';
+          return;
+        }
+        resultsEl.innerHTML = matches.map(p => {
+          const f = format(p);
+          return `<a class="search__hit" href="${base}${p.path}" target="_blank" rel="noopener">
+            <div>
+              <div class="search__hit-name">${escapeHtml(f.title)}</div>
+              <div class="search__hit-meta">${escapeHtml(f.meta)}</div>
+            </div>
+          </a>`;
+        }).join('');
+      }, 120);
+    });
+  </script>
+</Base>
